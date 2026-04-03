@@ -1284,10 +1284,10 @@
               <span>📋 데이터 매핑 (${fullData.length}행 × ${allColCount}열)</span>
               <div class="dm-header-actions">
                 <div class="dm-callout-inline">
-                  <span><span class="ie-callout-dot" style="background:#6C5CE7"></span>라벨</span>
-                  <span><span class="ie-callout-dot" style="background:#00B894"></span>값</span>
-                  <span><span class="ie-callout-dot" style="background:#FDCB6E"></span>시리즈</span>
-                  <span><span class="ie-callout-dot" style="background:#B2BEC3"></span>무시</span>
+                  <span><span class="ie-callout-dot" style="background:#6C5CE7"></span>이름</span>
+                  <span><span class="ie-callout-dot" style="background:#00B894"></span>숫자</span>
+                  <span><span class="ie-callout-dot" style="background:#FDCB6E"></span>구분</span>
+                  <span><span class="ie-callout-dot" style="background:#B2BEC3"></span>제외</span>
                 </div>
                 <button class="dm-close">✕</button>
               </div>
@@ -1349,87 +1349,151 @@
           const offsetX = svgRect.left - parentRect.left;
           const offsetY = svgRect.top - parentRect.top;
 
-          const numVal = Number(cellValue);
-          const matchTexts = [cellValue];
-          if (!isNaN(numVal)) {
-            matchTexts.push(T.fmt(numVal), T.fmtTick(numVal), numVal.toLocaleString(),
-              numVal.toFixed(1), String(Math.round(numVal)),
-              numVal.toFixed(1)+'%', Math.round(numVal)+'%', numVal.toFixed(2));
-          }
-
-          let found = false;
           dmChartPreview.style.position = 'relative';
+          let found = false;
 
-          const textEls = Array.from(svgEl.querySelectorAll('text'));
+          // 필터링된 차트 데이터에서의 실제 인덱스 계산
+          const filtered = applyVisibleCols(slide);
+          const fLabels = filtered.data.map(r => String(r[0] || '').trim());
+          const dataRowIdx = fLabels.indexOf(rowLabel);
+          const origHeader = allHeaders[ci] || '';
+          const fColIdx = filtered.headers.indexOf(origHeader);
 
-          // 행 라벨 위치 찾기
-          let labelBBox = null;
-          if (rowLabel) {
-            for (const txt of textEls) {
-              if (txt.textContent.trim() === rowLabel) {
-                try { labelBBox = txt.getBBox(); } catch(e) {}
-                break;
+          // SVG circle/rect로 직접 위치 찾기
+          if (colRole !== 'label' && dataRowIdx >= 0) {
+            const circles = Array.from(svgEl.querySelectorAll('circle:not([r="0"])'));
+            const seriesIdx = fColIdx > 0 ? fColIdx - 1 : -1;
+            const numLabels = fLabels.length;
+
+            if (seriesIdx >= 0 && numLabels > 0) {
+              const targetCircleIdx = seriesIdx * numLabels + dataRowIdx;
+              const dataCircles = circles.filter(c => c.getAttribute('stroke') && c.getAttribute('stroke-width'));
+              if (dataCircles[targetCircleIdx]) {
+                try {
+                  const bbox = dataCircles[targetCircleIdx].getBBox();
+                  const box = document.createElement('div');
+                  box.className = 'chart-hl-box';
+                  const pad = 8;
+                  box.style.left = (offsetX + (bbox.x - pad/2) * scaleX) + 'px';
+                  box.style.top = (offsetY + (bbox.y - pad/2) * scaleY) + 'px';
+                  box.style.width = ((bbox.width + pad) * scaleX) + 'px';
+                  box.style.height = ((bbox.height + pad) * scaleY) + 'px';
+                  box.style.borderColor = roleColors[colRole] || '#00B894';
+                  box.style.borderRadius = '50%';
+                  dmChartPreview.appendChild(box);
+                  found = true;
+                } catch(e) {}
+              }
+            }
+
+            if (!found) {
+              const rects = Array.from(svgEl.querySelectorAll('rect')).filter(r => {
+                const fill = r.getAttribute('fill') || '';
+                return fill !== T.bg && fill !== T.track && fill !== '#F8F8F8' && fill !== '#FFFFFF'
+                  && !fill.startsWith('url(') && r.getAttribute('height') !== String(vb.height || 750)
+                  && parseFloat(r.getAttribute('height') || 0) > 0;
+              });
+              const numSeries = filtered.headers.length - 1;
+              if (seriesIdx >= 0 && numLabels > 0 && rects.length >= numLabels) {
+                const targetIdx = dataRowIdx * numSeries + seriesIdx;
+                if (rects[targetIdx]) {
+                  try {
+                    const bbox = rects[targetIdx].getBBox();
+                    const box = document.createElement('div');
+                    box.className = 'chart-hl-box';
+                    const pad = 4;
+                    box.style.left = (offsetX + (bbox.x - pad) * scaleX) + 'px';
+                    box.style.top = (offsetY + (bbox.y - pad) * scaleY) + 'px';
+                    box.style.width = ((bbox.width + pad*2) * scaleX) + 'px';
+                    box.style.height = ((bbox.height + pad*2) * scaleY) + 'px';
+                    box.style.borderColor = roleColors[colRole] || '#00B894';
+                    dmChartPreview.appendChild(box);
+                    found = true;
+                  } catch(e) {}
+                }
               }
             }
           }
 
-          if (colRole === 'label') {
-            if (labelBBox) {
-              const box = document.createElement('div');
-              box.className = 'chart-hl-box';
-              const pad = 4;
-              box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
-              box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
-              box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
-              box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
-              box.style.borderColor = roleColors[colRole] || '#6C5CE7';
-              dmChartPreview.appendChild(box);
-              found = true;
+          // 텍스트 매칭 폴백
+          if (!found) {
+            const numVal = Number(cellValue);
+            const matchTexts = [cellValue];
+            if (!isNaN(numVal)) {
+              matchTexts.push(T.fmt(numVal), T.fmtTick(numVal), numVal.toLocaleString(),
+                numVal.toFixed(1), String(Math.round(numVal)),
+                numVal.toFixed(1)+'%', Math.round(numVal)+'%', numVal.toFixed(2));
             }
-          } else {
-            const candidates = [];
-            textEls.forEach(txt => {
-              const content = txt.textContent.trim();
-              const isMatch = matchTexts.some(m => m && content === m);
-              if (!isMatch) return;
-              try {
-                const bbox = txt.getBBox();
-                let dist = 0;
-                if (labelBBox) {
-                  const dx = (bbox.x + bbox.width/2) - (labelBBox.x + labelBBox.width/2);
-                  const dy = (bbox.y + bbox.height/2) - (labelBBox.y + labelBBox.height/2);
-                  dist = Math.sqrt(dx*dx + dy*dy);
+
+            const textEls = Array.from(svgEl.querySelectorAll('text'));
+            let labelBBox = null;
+            if (rowLabel) {
+              for (const txt of textEls) {
+                if (txt.textContent.trim() === rowLabel) {
+                  try { labelBBox = txt.getBBox(); } catch(e) {}
+                  break;
                 }
-                candidates.push({ txt, bbox, dist });
-              } catch(e) {}
-            });
-
-            if (candidates.length > 0) {
-              candidates.sort((a, b) => a.dist - b.dist);
-              const best = candidates[0];
-              const box = document.createElement('div');
-              box.className = 'chart-hl-box';
-              const pad = 4;
-              box.style.left = (offsetX + best.bbox.x * scaleX - pad) + 'px';
-              box.style.top = (offsetY + best.bbox.y * scaleY - pad) + 'px';
-              box.style.width = (best.bbox.width * scaleX + pad * 2) + 'px';
-              box.style.height = (best.bbox.height * scaleY + pad * 2) + 'px';
-              box.style.borderColor = roleColors[colRole] || '#6C5CE7';
-              dmChartPreview.appendChild(box);
-              found = true;
+              }
             }
 
-            if (!found && labelBBox) {
-              const box = document.createElement('div');
-              box.className = 'chart-hl-box';
-              const pad = 4;
-              box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
-              box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
-              box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
-              box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
-              box.style.borderColor = '#6C5CE7';
-              dmChartPreview.appendChild(box);
-              found = true;
+            if (colRole === 'label') {
+              if (labelBBox) {
+                const box = document.createElement('div');
+                box.className = 'chart-hl-box';
+                const pad = 4;
+                box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
+                box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
+                box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
+                box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
+                box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+                dmChartPreview.appendChild(box);
+                found = true;
+              }
+            } else {
+              const candidates = [];
+              textEls.forEach(txt => {
+                const content = txt.textContent.trim();
+                const isMatch = matchTexts.some(m => m && content === m);
+                if (!isMatch) return;
+                try {
+                  const bbox = txt.getBBox();
+                  let dist = 0;
+                  if (labelBBox) {
+                    const dx = (bbox.x + bbox.width/2) - (labelBBox.x + labelBBox.width/2);
+                    const dy = (bbox.y + bbox.height/2) - (labelBBox.y + labelBBox.height/2);
+                    dist = Math.sqrt(dx*dx + dy*dy);
+                  }
+                  candidates.push({ bbox, dist });
+                } catch(e) {}
+              });
+
+              if (candidates.length > 0) {
+                candidates.sort((a, b) => a.dist - b.dist);
+                const best = candidates[0];
+                const box = document.createElement('div');
+                box.className = 'chart-hl-box';
+                const pad = 4;
+                box.style.left = (offsetX + best.bbox.x * scaleX - pad) + 'px';
+                box.style.top = (offsetY + best.bbox.y * scaleY - pad) + 'px';
+                box.style.width = (best.bbox.width * scaleX + pad * 2) + 'px';
+                box.style.height = (best.bbox.height * scaleY + pad * 2) + 'px';
+                box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+                dmChartPreview.appendChild(box);
+                found = true;
+              }
+
+              if (!found && labelBBox) {
+                const box = document.createElement('div');
+                box.className = 'chart-hl-box';
+                const pad = 4;
+                box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
+                box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
+                box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
+                box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
+                box.style.borderColor = '#6C5CE7';
+                dmChartPreview.appendChild(box);
+                found = true;
+              }
             }
           }
 

@@ -688,7 +688,7 @@
     }
 
     // ── 역할 정의 ──
-    const colRoleOpts = { label: '라벨', value: '값', series: '시리즈', ignore: '무시' };
+    const colRoleOpts = { label: '이름', value: '숫자', series: '구분', ignore: '제외' };
     const rowRoleOpts = { data: '데이터', ignore: '무시' };
     const roleColors = { label: '#6C5CE7', value: '#00B894', series: '#FDCB6E', ignore: '#B2BEC3', data: '#00B894' };
 
@@ -757,10 +757,10 @@
         </table>
       </div>
       <div class="ie-preview-legend">
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#6C5CE7"></span>라벨</span>
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#00B894"></span>값</span>
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#FDCB6E"></span>시리즈</span>
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#B2BEC3"></span>무시</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#6C5CE7"></span>이름</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#00B894"></span>숫자</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#FDCB6E"></span>구분</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#B2BEC3"></span>제외</span>
       </div>
     </div>`;
 
@@ -833,10 +833,10 @@
             <button class="ie-expand-btn" title="전체 데이터 보기">🔍 확대</button>
           </div>
           <div class="ie-role-callout">
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#6C5CE7"></span><span class="ie-callout-name">라벨</span> 차트의 항목 이름 (X축, 범례)</div>
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#00B894"></span><span class="ie-callout-name">값</span> 차트에 표시할 숫자 데이터</div>
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#FDCB6E"></span><span class="ie-callout-name">시리즈</span> 여러 선/막대를 구분하는 그룹</div>
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#B2BEC3"></span><span class="ie-callout-name">무시</span> 차트에서 제외</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#6C5CE7"></span><span class="ie-callout-name">이름</span> 기간, 앱명, 항목 등 구분짓는 이름</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#00B894"></span><span class="ie-callout-name">숫자</span> 차트에 표시할 숫자 데이터</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#FDCB6E"></span><span class="ie-callout-name">구분</span> 여러 선/막대를 나누는 그룹</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#B2BEC3"></span><span class="ie-callout-name">제외</span> 차트에서 빼기</div>
           </div>
           <div class="ie-preview-hint">셀을 클릭하면 차트에서 위치를 확인할 수 있어요</div>
           ${previewHTML}
@@ -1024,7 +1024,6 @@
 
       const cellValue = fullData[ri] ? String(fullData[ri][ci] || '').trim() : '';
       const rowLabel = fullData[ri] ? String(fullData[ri][0] || '').trim() : '';
-      const colHeader = allHeaders[ci] || '';
       const colRole = slide.colRoles ? slide.colRoles[ci] : 'value';
       if (!cellValue) return;
 
@@ -1037,78 +1036,187 @@
       const offsetX = svgRect.left - chartRect.left;
       const offsetY = svgRect.top - chartRect.top;
 
-      // 숫자 포맷 변형 생성 (차트에서 포맷된 값과 매칭)
-      const numVal = Number(cellValue);
-      const matchTexts = [cellValue];
-      if (!isNaN(numVal)) {
-        matchTexts.push(T.fmt(numVal));
-        matchTexts.push(T.fmtTick(numVal));
-        matchTexts.push(numVal.toLocaleString());
-        matchTexts.push(numVal.toFixed(1));
-        matchTexts.push(String(Math.round(numVal)));
-        // 퍼센트
-        matchTexts.push(numVal.toFixed(1) + '%');
-        matchTexts.push(Math.round(numVal) + '%');
+      chartEl.style.position = 'relative';
+      let found = false;
+
+      // ── 필터링된 차트 데이터에서의 실제 인덱스 계산 ──
+      const filtered = applyVisibleCols(slide);
+      const fLabels = filtered.data.map(r => String(r[0] || '').trim());
+      const dataRowIdx = fLabels.indexOf(rowLabel); // 필터링된 데이터에서의 행 인덱스
+
+      // 필터링된 헤더에서 열 인덱스 찾기
+      const origHeader = allHeaders[ci] || '';
+      const fColIdx = filtered.headers.indexOf(origHeader);
+
+      // ── 1. SVG circle/rect 요소로 직접 위치 찾기 (가장 정확) ──
+      if (colRole !== 'label' && dataRowIdx >= 0) {
+        // 라인 차트: circle 요소들 중 해당 데이터 포인트 찾기
+        const circles = Array.from(svgEl.querySelectorAll('circle:not([r="0"])'));
+        // 시리즈 인덱스 (필터링된 헤더 기준, 0번은 라벨이므로 -1)
+        const seriesIdx = fColIdx > 0 ? fColIdx - 1 : -1;
+        const numLabels = fLabels.length;
+
+        if (seriesIdx >= 0 && numLabels > 0) {
+          // circle이 시리즈별로 순서대로 나열됨: series0[0..n-1], series1[0..n-1], ...
+          const targetCircleIdx = seriesIdx * numLabels + dataRowIdx;
+          // stroke 있는 데이터 포인트 circle만 필터 (그라디언트 등 제외)
+          const dataCircles = circles.filter(c => c.getAttribute('stroke') && c.getAttribute('stroke-width'));
+          if (dataCircles[targetCircleIdx]) {
+            try {
+              const bbox = dataCircles[targetCircleIdx].getBBox();
+              const box = document.createElement('div');
+              box.className = 'chart-hl-box';
+              const pad = 8;
+              box.style.left = (offsetX + (bbox.x - pad/2) * scaleX) + 'px';
+              box.style.top = (offsetY + (bbox.y - pad/2) * scaleY) + 'px';
+              box.style.width = ((bbox.width + pad) * scaleX) + 'px';
+              box.style.height = ((bbox.height + pad) * scaleY) + 'px';
+              box.style.borderColor = roleColors[colRole] || '#00B894';
+              box.style.borderRadius = '50%';
+              chartEl.appendChild(box);
+              found = true;
+            } catch(e) {}
+          }
+        }
+
+        // 바 차트: rect 요소들 중 해당 막대 찾기
+        if (!found) {
+          const rects = Array.from(svgEl.querySelectorAll('rect')).filter(r => {
+            const fill = r.getAttribute('fill') || '';
+            // 배경, 트랙, 그라디언트 rect 제외
+            return fill !== T.bg && fill !== T.track && fill !== '#F8F8F8' && fill !== '#FFFFFF'
+              && !fill.startsWith('url(') && r.getAttribute('height') !== String(vb.height || 750)
+              && parseFloat(r.getAttribute('height') || 0) > 0;
+          });
+          // 시리즈 수와 라벨 수로 rect 인덱스 계산
+          const numSeries = filtered.headers.length - 1;
+          if (seriesIdx >= 0 && numLabels > 0 && rects.length >= numLabels) {
+            // 세로바: 그룹별로 시리즈 순서 → idx = dataRowIdx * numSeries + seriesIdx
+            const targetIdx = dataRowIdx * numSeries + seriesIdx;
+            if (rects[targetIdx]) {
+              try {
+                const bbox = rects[targetIdx].getBBox();
+                const box = document.createElement('div');
+                box.className = 'chart-hl-box';
+                const pad = 4;
+                box.style.left = (offsetX + (bbox.x - pad) * scaleX) + 'px';
+                box.style.top = (offsetY + (bbox.y - pad) * scaleY) + 'px';
+                box.style.width = ((bbox.width + pad*2) * scaleX) + 'px';
+                box.style.height = ((bbox.height + pad*2) * scaleY) + 'px';
+                box.style.borderColor = roleColors[colRole] || '#00B894';
+                chartEl.appendChild(box);
+                found = true;
+              } catch(e) {}
+            }
+          }
+        }
       }
 
-      let found = false;
-      chartEl.style.position = 'relative';
+      // ── 2. 텍스트 매칭 폴백 (위 방법으로 못 찾았을 때) ──
+      if (!found) {
+        const numVal = Number(cellValue);
+        const matchTexts = [cellValue];
+        if (!isNaN(numVal)) {
+          matchTexts.push(T.fmt(numVal), T.fmtTick(numVal), numVal.toLocaleString(),
+            numVal.toFixed(1), String(Math.round(numVal)),
+            numVal.toFixed(1) + '%', Math.round(numVal) + '%', numVal.toFixed(2));
+        }
 
-      // SVG 내 모든 text 요소에서 매칭 검색
-      const textEls = svgEl.querySelectorAll('text');
-      textEls.forEach(txt => {
-        const content = txt.textContent.trim();
-        const isMatch = matchTexts.some(m => m && content === m);
-        // 라벨 열이면 라벨 텍스트도 매칭
-        const isLabelMatch = colRole === 'label' && content === cellValue;
-        if (!isMatch && !isLabelMatch) return;
+        const textEls = Array.from(svgEl.querySelectorAll('text'));
 
-        // 이 텍스트의 SVG bbox → DOM 좌표
-        try {
-          const bbox = txt.getBBox();
-          const box = document.createElement('div');
-          box.className = 'chart-hl-box';
-          const pad = 4;
-          box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
-          box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
-          box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
-          box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
-          box.style.borderColor = roleColors[colRole] || '#6C5CE7';
-          chartEl.appendChild(box);
-          found = true;
-        } catch(e) {}
-      });
+        // 라벨 위치 찾기
+        let labelBBox = null;
+        if (rowLabel) {
+          for (const txt of textEls) {
+            if (txt.textContent.trim() === rowLabel) {
+              try { labelBBox = txt.getBBox(); } catch(e) {}
+              break;
+            }
+          }
+        }
 
-      // rect 요소도 검색 (막대 차트 — 높이/위치로 매칭은 어려우니 인접 텍스트 기반)
-      // 이미 text 매칭으로 충분하지만, 못 찾았으면 라벨 기반으로 관련 rect 찾기
-      if (!found && rowLabel) {
-        textEls.forEach(txt => {
-          if (txt.textContent.trim() !== rowLabel) return;
-          try {
-            const bbox = txt.getBBox();
+        if (colRole === 'label') {
+          if (labelBBox) {
             const box = document.createElement('div');
             box.className = 'chart-hl-box';
             const pad = 4;
-            box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
-            box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
-            box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
-            box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
+            box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
+            box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
+            box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
+            box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
+            box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+            chartEl.appendChild(box);
+            found = true;
+          }
+        } else {
+          // 시리즈 헤더(범례)의 위치도 찾아서 근접 매칭에 활용
+          const origHeader = allHeaders[ci] || '';
+          let headerBBox = null;
+          for (const txt of textEls) {
+            if (txt.textContent.trim() === origHeader) {
+              try { headerBBox = txt.getBBox(); } catch(e) {}
+              break;
+            }
+          }
+
+          const candidates = [];
+          textEls.forEach(txt => {
+            const content = txt.textContent.trim();
+            const isMatch = matchTexts.some(m => m && content === m);
+            if (!isMatch) return;
+            try {
+              const bbox = txt.getBBox();
+              // 라벨과 헤더(범례) 양쪽 거리를 합산해서 가장 가까운 것 선택
+              let dist = 0;
+              if (labelBBox) {
+                const dx = (bbox.x + bbox.width/2) - (labelBBox.x + labelBBox.width/2);
+                const dy = (bbox.y + bbox.height/2) - (labelBBox.y + labelBBox.height/2);
+                dist += Math.sqrt(dx*dx + dy*dy);
+              }
+              // 같은 시리즈(열) 색상의 텍스트를 우선
+              const fill = txt.getAttribute('fill') || '';
+              candidates.push({ txt, bbox, dist, fill });
+            } catch(e) {}
+          });
+
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => a.dist - b.dist);
+            const best = candidates[0];
+            const box = document.createElement('div');
+            box.className = 'chart-hl-box';
+            const pad = 4;
+            box.style.left = (offsetX + best.bbox.x * scaleX - pad) + 'px';
+            box.style.top = (offsetY + best.bbox.y * scaleY - pad) + 'px';
+            box.style.width = (best.bbox.width * scaleX + pad * 2) + 'px';
+            box.style.height = (best.bbox.height * scaleY + pad * 2) + 'px';
+            box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+            chartEl.appendChild(box);
+            found = true;
+          }
+
+          if (!found && labelBBox) {
+            const box = document.createElement('div');
+            box.className = 'chart-hl-box';
+            const pad = 4;
+            box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
+            box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
+            box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
+            box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
             box.style.borderColor = '#6C5CE7';
             chartEl.appendChild(box);
             found = true;
-          } catch(e) {}
-        });
+          }
+        }
       }
 
-      // 하단 툴팁도 표시
-      const roleName = colRole === 'label' ? '라벨' : colRole === 'value' ? '값' : colRole === 'series' ? '시리즈' : '무시';
+      // 하단 툴팁
+      const roleName = colRole === 'label' ? '이름' : colRole === 'value' ? '숫자' : colRole === 'series' ? '구분' : '제외';
       const tooltip = document.createElement('div');
       tooltip.className = 'chart-highlight-pulse';
       tooltip.innerHTML = `<span class="hl-dot" style="background:${roleColors[colRole]}"></span>
         <span class="hl-text">"${_h(cellValue)}" → ${roleName} · ${_h(rowLabel || '행 '+(ri+1))}</span>`;
       chartEl.appendChild(tooltip);
 
-      // 4초 후 자동 제거
       setTimeout(() => {
         wrapper.querySelectorAll('.chart-hl-box').forEach(el => el.remove());
         tooltip.remove();
@@ -1220,7 +1328,6 @@
 
         // 모달 내 차트 하이라이트 헬퍼
         function highlightInModalChart(ri, ci, sourceEl) {
-          // 이전 하이라이트 제거
           dmChartPreview.querySelectorAll('.chart-hl-box').forEach(el => el.remove());
           dmChartPreview.querySelectorAll('.chart-highlight-pulse').forEach(el => el.remove());
           modal.querySelectorAll('.ie-cell-active').forEach(el => el.classList.remove('ie-cell-active'));
@@ -1247,49 +1354,83 @@
           if (!isNaN(numVal)) {
             matchTexts.push(T.fmt(numVal), T.fmtTick(numVal), numVal.toLocaleString(),
               numVal.toFixed(1), String(Math.round(numVal)),
-              numVal.toFixed(1)+'%', Math.round(numVal)+'%');
+              numVal.toFixed(1)+'%', Math.round(numVal)+'%', numVal.toFixed(2));
           }
 
           let found = false;
           dmChartPreview.style.position = 'relative';
 
-          svgEl.querySelectorAll('text').forEach(txt => {
-            const content = txt.textContent.trim();
-            const isMatch = matchTexts.some(m => m && content === m);
-            const isLabelMatch = colRole === 'label' && content === cellValue;
-            if (!isMatch && !isLabelMatch) return;
-            try {
-              const bbox = txt.getBBox();
+          const textEls = Array.from(svgEl.querySelectorAll('text'));
+
+          // 행 라벨 위치 찾기
+          let labelBBox = null;
+          if (rowLabel) {
+            for (const txt of textEls) {
+              if (txt.textContent.trim() === rowLabel) {
+                try { labelBBox = txt.getBBox(); } catch(e) {}
+                break;
+              }
+            }
+          }
+
+          if (colRole === 'label') {
+            if (labelBBox) {
               const box = document.createElement('div');
               box.className = 'chart-hl-box';
               const pad = 4;
-              box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
-              box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
-              box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
-              box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
+              box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
+              box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
+              box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
+              box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
               box.style.borderColor = roleColors[colRole] || '#6C5CE7';
               dmChartPreview.appendChild(box);
               found = true;
-            } catch(e) {}
-          });
-
-          if (!found && rowLabel) {
-            svgEl.querySelectorAll('text').forEach(txt => {
-              if (txt.textContent.trim() !== rowLabel) return;
+            }
+          } else {
+            const candidates = [];
+            textEls.forEach(txt => {
+              const content = txt.textContent.trim();
+              const isMatch = matchTexts.some(m => m && content === m);
+              if (!isMatch) return;
               try {
                 const bbox = txt.getBBox();
-                const box = document.createElement('div');
-                box.className = 'chart-hl-box';
-                const pad = 4;
-                box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
-                box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
-                box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
-                box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
-                box.style.borderColor = '#6C5CE7';
-                dmChartPreview.appendChild(box);
-                found = true;
+                let dist = 0;
+                if (labelBBox) {
+                  const dx = (bbox.x + bbox.width/2) - (labelBBox.x + labelBBox.width/2);
+                  const dy = (bbox.y + bbox.height/2) - (labelBBox.y + labelBBox.height/2);
+                  dist = Math.sqrt(dx*dx + dy*dy);
+                }
+                candidates.push({ txt, bbox, dist });
               } catch(e) {}
             });
+
+            if (candidates.length > 0) {
+              candidates.sort((a, b) => a.dist - b.dist);
+              const best = candidates[0];
+              const box = document.createElement('div');
+              box.className = 'chart-hl-box';
+              const pad = 4;
+              box.style.left = (offsetX + best.bbox.x * scaleX - pad) + 'px';
+              box.style.top = (offsetY + best.bbox.y * scaleY - pad) + 'px';
+              box.style.width = (best.bbox.width * scaleX + pad * 2) + 'px';
+              box.style.height = (best.bbox.height * scaleY + pad * 2) + 'px';
+              box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+              dmChartPreview.appendChild(box);
+              found = true;
+            }
+
+            if (!found && labelBBox) {
+              const box = document.createElement('div');
+              box.className = 'chart-hl-box';
+              const pad = 4;
+              box.style.left = (offsetX + labelBBox.x * scaleX - pad) + 'px';
+              box.style.top = (offsetY + labelBBox.y * scaleY - pad) + 'px';
+              box.style.width = (labelBBox.width * scaleX + pad * 2) + 'px';
+              box.style.height = (labelBBox.height * scaleY + pad * 2) + 'px';
+              box.style.borderColor = '#6C5CE7';
+              dmChartPreview.appendChild(box);
+              found = true;
+            }
           }
 
           const roleName = colRole === 'label' ? '라벨' : colRole === 'value' ? '값' : colRole === 'series' ? '시리즈' : '무시';
@@ -2082,7 +2223,7 @@
             <div class="guide-modal-num">5</div>
             <div>
               <div class="guide-modal-heading">다운로드 & 저장</div>
-              <div class="guide-modal-desc">개별 PNG/SVG 다운로드, 일괄 다운로드, 프로젝트 저장/불러오기를 지원합니다. 앱 아이콘도 포함돼요.</div>
+              <div class="guide-modal-desc">개별 PNG/SVG 다운로드, 일괄 다운로드, 프로젝트 저장/불러오기를 지원합니다. 앱 아이콘도 포함돼요.<br><span style="color:var(--accent);font-weight:600">💡 SVG로 다운받으면 Figma에서 바로 편집할 수 있어요.</span></div>
             </div>
           </div>
         </div>

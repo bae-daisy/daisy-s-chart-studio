@@ -772,8 +772,8 @@ const SvgCharts = {
       if (p.pkg || p.iconUrl) {
         const clipId = `clip-${i}-${Date.now()}`;
         let iconUrl = p.iconUrl || SvgCharts._appIcon(p.pkg);
-        // URL 검증: http(s) 또는 data:image만 허용
-        if (iconUrl && !/^(https?:\/\/|data:image\/)/i.test(iconUrl)) iconUrl = '';
+        // URL 검증: http(s), data:image, 또는 로컬 상대경로(icons/)만 허용
+        if (iconUrl && !/^(https?:\/\/|data:image\/|icons\/)/i.test(iconUrl)) iconUrl = '';
         if (iconUrl) {
           svg += `<defs><clipPath id="${clipId}"><circle cx="${cx}" cy="${cy}" r="${r - 2}"/></clipPath></defs>`;
           svg += `<image href="${iconUrl}" x="${cx - r + 2}" y="${cy - r + 2}" width="${(r-2)*2}" height="${(r-2)*2}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice" onerror="this.style.display='none'"/>`;

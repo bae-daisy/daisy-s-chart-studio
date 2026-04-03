@@ -11,6 +11,7 @@
     const s = String(url).trim();
     if (/^https?:\/\//i.test(s)) return s;
     if (/^data:image\//i.test(s)) return s;
+    if (/^icons\/[\w.-]+$/i.test(s)) return s;
     return '';
   }
 

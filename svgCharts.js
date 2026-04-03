@@ -917,8 +917,8 @@ const SvgCharts = {
   // ── 유틸 ──
   _polar(cx,cy,r,deg) { const rad=(deg-90)*Math.PI/180; return {x:cx+r*Math.cos(rad), y:cy+r*Math.sin(rad)}; },
 
-  // 패키지명 → 앱 아이콘 URL (로컬 icons/ 폴더)
-  _appIcon(pkg) {
+  // 패키지명 또는 앱명 → 앱 아이콘 URL (로컬 icons/ 폴더)
+  _appIcon(nameOrPkg) {
     const map = {
       'com.netflix.mediaclient': 'icons/netflix.png',
       'net.cj.cjhv.gs.tving': 'icons/tving.png',
@@ -926,8 +926,23 @@ const SvgCharts = {
       'com.coupang.mobile.play': 'icons/coupangplay.png',
       'com.disney.disneyplus': 'icons/disneyplus.png',
       'com.frograms.wplay': 'icons/watcha.png',
+      // 앱명으로도 매핑
+      'Netflix(넷플릭스)': 'icons/netflix.png',
+      '넷플릭스': 'icons/netflix.png',
+      'Netflix': 'icons/netflix.png',
+      'TVING': 'icons/tving.png',
+      '티빙': 'icons/tving.png',
+      'Wavve (웨이브)': 'icons/wavve.png',
+      '웨이브': 'icons/wavve.png',
+      'Wavve': 'icons/wavve.png',
+      '쿠팡플레이': 'icons/coupangplay.png',
+      'Coupang Play': 'icons/coupangplay.png',
+      'Disney+': 'icons/disneyplus.png',
+      '디즈니+': 'icons/disneyplus.png',
+      '왓챠': 'icons/watcha.png',
+      'Watcha': 'icons/watcha.png',
     };
-    return map[pkg] || '';
+    return map[nameOrPkg] || '';
   },
   _smooth(pts) {
     if (pts.length<2) return '';

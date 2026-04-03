@@ -80,7 +80,57 @@ const Parser = {
     // 자동 차트 추천
     const chartKind = this.recommendChart(type, headers, data);
 
+    // 패키지명 → 앱명 자동 변환
+    this._convertPkgToAppName(headers, data);
+
     return { type, chartKind, meta, headers, data };
+  },
+
+  // 패키지명 → 앱명 변환 맵
+  _PKG_TO_NAME: {
+    'com.netflix.mediaclient': 'Netflix(넷플릭스)',
+    'net.cj.cjhv.gs.tving': 'TVING',
+    'kr.co.captv.pooqV2': 'Wavve (웨이브)',
+    'com.coupang.mobile.play': '쿠팡플레이',
+    'com.disney.disneyplus': 'Disney+',
+    'com.frograms.wplay': '왓챠',
+    'com.coupang.mobile': '쿠팡',
+    'com.coupang.mobile.eats': '쿠팡이츠',
+    'com.kakao.talk': '카카오톡',
+    'com.nhn.android.search': '네이버',
+    'com.sampleapp': '배달의민족',
+  },
+
+  // 데이터에서 패키지명 열을 찾아 앱명으로 변환
+  _convertPkgToAppName(headers, data) {
+    // "패키지명" 열 찾기
+    const pkgIdx = headers.findIndex(h => /패키지|package|pkg/i.test(h));
+    if (pkgIdx < 0) return;
+
+    // 앱명 열이 이미 있는지 확인
+    const nameIdx = headers.findIndex(h => /앱명|앱 이름|이름/i.test(h));
+
+    // 앱명 열이 있으면: 패키지명 열만 숨기기 (데이터에서 제거)
+    // 앱명 열이 없으면: 패키지명 열을 앱명으로 변환
+    if (nameIdx >= 0 && nameIdx !== pkgIdx) {
+      // 앱명 열이 따로 있으니 패키지명 열 제거
+      headers.splice(pkgIdx, 1);
+      data.forEach(r => r.splice(pkgIdx, 1));
+    } else {
+      // 패키지명 → 앱명으로 변환
+      headers[pkgIdx] = '앱 이름';
+      const map = this._PKG_TO_NAME;
+      data.forEach(r => {
+        const pkg = (r[pkgIdx] || '').trim();
+        if (map[pkg]) {
+          r[pkgIdx] = map[pkg];
+        } else if (pkg.includes('.')) {
+          // 알 수 없는 패키지명: 마지막 세그먼트를 이름으로
+          const parts = pkg.split('.');
+          r[pkgIdx] = parts[parts.length - 1];
+        }
+      });
+    }
   },
 
   // ── 데이터 타입 → 최적 차트 자동 추천 ──

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self'">
+  <title>Chart Studio — MI INSIGHT 시각화</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 잠금 화면 -->
+  <div id="lockScreen" class="lock-screen">
+    <div class="lock-panel">
+      <div class="lock-icon">🔒</div>
+      <h2 class="lock-title">Chart Studio</h2>
+      <p class="lock-desc">팀 전용 도구입니다. 비밀번호를 입력해주세요.</p>
+      <form id="lockForm" autocomplete="off">
+        <input type="password" id="lockInput" class="lock-input" placeholder="비밀번호" autofocus autocomplete="off">
+        <button type="submit" class="lock-btn">입장</button>
+      </form>
+      <div id="lockError" class="lock-error"></div>
+    </div>
+  </div>
+
+  <div class="app" id="app" style="display:none">
+    <!-- 온보딩 -->
+    <div id="onboarding" class="onboarding">
+      <div class="onboarding-badge">
+        <div class="badge-dot"></div>
+        <span>Chart Studio</span>
+      </div>
+      <h1 class="onboarding-title">데이터를 넣으면<br><span class="accent">장표가 완성</span>됩니다</h1>
+      <p class="onboarding-desc">MI-INSIGHT CSV를 올리면 바로 장표를 만들어드려요</p>
+      <div id="savedProjects" class="saved-projects"></div>
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="upload-text">파일을 드래그하거나 클릭</div>
+        <div class="upload-hint">.csv, .xlsx 파일 (여러 개 가능)</div>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple hidden>
+      </div>
+
+      <!-- 가이드 콜아웃 -->
+      <div class="guide-callout" id="guideCallout">
+        <span class="guide-callout-icon">📖</span>
+        <span class="guide-callout-text">처음이신가요? 사용법 확인하기</span>
+        <span class="guide-callout-arrow">›</span>
+      </div>
+    </div>
+
+    <!-- 결과 화면 -->
+    <div id="results" class="results" style="display:none">
+      <div class="results-header">
+        <button class="home-btn" id="homeBtn">← 새 프로젝트</button>
+        <div class="project-info">
+          <span class="project-name" id="projectName" contenteditable="true">새 프로젝트</span>
+          <span class="slide-count" id="slideCount">0개 장표</span>
+        </div>
+        <div class="header-actions">
+          <label class="add-btn" for="addFileInput">
+            + 장표 추가
+            <input type="file" id="addFileInput" accept=".csv,.xlsx,.xls" multiple hidden>
+          </label>
+          <button class="header-btn" id="saveBtn" title="프로젝트 저장">💾 저장</button>
+          <button class="header-btn" id="loadBtn" title="저장된 프로젝트 불러오기">📂 불러오기</button>
+          <button class="header-btn" id="batchDlBtn" title="일괄 다운로드">📥 일괄 다운로드</button>
+          <button class="header-btn" id="guideBtn" title="사용법 가이드">❓ 가이드</button>
+        </div>
+      </div>
+      <div class="results-body">
+        <div class="slide-nav" id="slideNav"></div>
+        <div id="chartsContainer" class="charts-container"></div>
+      </div>
+      <div class="add-slide-bottom">
+        <label class="add-slide-bottom-btn" for="addFileBottom">
+          + 장표 추가
+          <input type="file" id="addFileBottom" accept=".csv,.xlsx,.xls" multiple hidden>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ── 잠금 화면 ──
+  (function() {
+    const HASH = '0af6d00095f396070a5af43d21e4e848eefe564a875fa77fa94e55d8a80bab59';
+    const SESSION_KEY = 'cs-unlocked';
+
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function unlock() {
+      document.getElementById('lockScreen').style.display = 'none';
+      document.getElementById('app').style.display = '';
+      sessionStorage.setItem(SESSION_KEY, '1');
+    }
+
+    // 이미 인증된 세션이면 바로 통과
+    if (sessionStorage.getItem(SESSION_KEY) === '1') {
+      document.addEventListener('DOMContentLoaded', unlock);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      if (sessionStorage.getItem(SESSION_KEY) === '1') { unlock(); return; }
+      document.getElementById('lockForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const pw = document.getElementById('lockInput').value;
+        const hash = await sha256(pw);
+        if (hash === HASH) {
+          unlock();
+        } else {
+          const err = document.getElementById('lockError');
+          err.textContent = '비밀번호가 틀렸어요';
+          document.getElementById('lockInput').value = '';
+          document.getElementById('lockInput').focus();
+          setTimeout(() => err.textContent = '', 3000);
+        }
+      });
+    });
+  })();
+  </script>
+  <script src="parser.js"></script>
+  <script src="chartTheme.js"></script>
+  <script src="svgCharts.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

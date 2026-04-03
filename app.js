@@ -1,0 +1,2326 @@
+// ── 메인 앱 로직 ──
+(function() {
+  // ── 보안 헬퍼 ──
+  // HTML 이스케이프 (XSS 방지)
+  function _h(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  // URL 검증 (아이콘 URL 등)
+  function _safeUrl(url) {
+    if (!url) return '';
+    const s = String(url).trim();
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^data:image\//i.test(s)) return s;
+    return '';
+  }
+
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput = document.getElementById('fileInput');
+  const addFileInput = document.getElementById('addFileInput');
+  const onboarding = document.getElementById('onboarding');
+  const results = document.getElementById('results');
+  const container = document.getElementById('chartsContainer');
+  const homeBtn = document.getElementById('homeBtn');
+
+  // 슬라이드 데이터 저장
+  const slides = [];
+  let projectName = '새 프로젝트';
+
+  // 카테고리별 차트 유형 HTML 생성
+  function buildKindOptionsHTML(activeKind, recommended) {
+    const cats = T.KIND_CATEGORIES;
+    let html = '';
+    Object.entries(cats).forEach(([catKey, cat]) => {
+      const kinds = Object.entries(T.KINDS).filter(([k, v]) => v.category === catKey);
+      if (kinds.length === 0) return;
+      html += `<div class="kind-category">`;
+      html += `<div class="kind-category-label">${cat.icon} ${cat.label}<span class="kind-tip-trigger" data-tip="${cat.tip.replace(/"/g,'&quot;')}">?</span></div>`;
+      html += `<div class="kind-category-items">`;
+      kinds.forEach(([k, v]) => {
+        const isActive = activeKind === k ? ' active' : '';
+        const isRec = recommended.includes(k);
+        html += `<button class="kind-btn${isActive}" data-kind="${k}">${v.icon} ${v.label}${isRec ? '<span class="rec-badge">추천</span>' : ''}</button>`;
+      });
+      html += `</div></div>`;
+    });
+    return html;
+  }
+
+  // 툴팁 표시 (body에 fixed로 띄움)
+  let kindTipEl = null;
+  document.addEventListener('mouseenter', function(e) {
+    if (!e.target.classList.contains('kind-tip-trigger')) return;
+    if (!kindTipEl) {
+      kindTipEl = document.createElement('div');
+      kindTipEl.className = 'kind-tip-bubble';
+      document.body.appendChild(kindTipEl);
+    }
+    kindTipEl.textContent = e.target.dataset.tip;
+    kindTipEl.style.display = 'block';
+    const rect = e.target.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - 115;
+    let top = rect.bottom + 8;
+    // 화면 밖으로 나가지 않도록
+    if (left < 8) left = 8;
+    if (left + 230 > window.innerWidth - 8) left = window.innerWidth - 238;
+    if (top + 100 > window.innerHeight) top = rect.top - 8 - kindTipEl.offsetHeight;
+    kindTipEl.style.left = left + 'px';
+    kindTipEl.style.top = top + 'px';
+  }, true);
+  document.addEventListener('mouseleave', function(e) {
+    if (!e.target.classList.contains('kind-tip-trigger')) return;
+    if (kindTipEl) kindTipEl.style.display = 'none';
+  }, true);
+
+  // ── SVG 이미지 base64 인라인화 (다운로드용) ──
+  function inlineSvgImages(svgEl) {
+    const images = svgEl.querySelectorAll('image');
+    if (images.length === 0) return Promise.resolve();
+    return Promise.all(Array.from(images).map(img => {
+      const href = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+      if (!href || href.startsWith('data:')) return Promise.resolve();
+      if (!/^https?:\/\//i.test(href)) return Promise.resolve();
+      return new Promise(resolve => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const imgEl = new Image();
+        imgEl.crossOrigin = 'anonymous';
+        imgEl.onload = () => {
+          canvas.width = imgEl.naturalWidth;
+          canvas.height = imgEl.naturalHeight;
+          ctx.drawImage(imgEl, 0, 0);
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            img.setAttribute('href', dataUrl);
+            img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          } catch(e) { /* CORS 실패 시 무시 */ }
+          resolve();
+        };
+        imgEl.onerror = () => resolve();
+        imgEl.src = href;
+      });
+    }));
+  }
+
+  // ── 텍스트 수정 모드 ──
+  function toggleTextEditMode(chartEl, chartArea, btn) {
+    const svgEl = chartEl.querySelector('svg');
+    if (!svgEl) return;
+
+    const isActive = chartArea.classList.contains('text-edit-mode');
+    if (isActive) {
+      exitTextEditMode(chartArea, svgEl, btn);
+      return;
+    }
+
+    chartArea.classList.add('text-edit-mode');
+    btn.classList.add('active');
+    svgEl.style.pointerEvents = 'auto';
+
+    // 안내 배너
+    const banner = document.createElement('div');
+    banner.className = 'text-edit-banner';
+    banner.innerHTML = '✍️ 텍스트를 클릭하면 수정할 수 있어요 <button class="text-edit-done">완료</button>';
+    chartArea.appendChild(banner);
+    banner.querySelector('.text-edit-done').addEventListener('click', () => {
+      exitTextEditMode(chartArea, svgEl, btn);
+    });
+
+    // SVG 텍스트에 호버/클릭 이벤트
+    const texts = svgEl.querySelectorAll('text');
+    texts.forEach(t => {
+      t.style.cursor = 'pointer';
+      t._origFill = t.getAttribute('fill');
+      t.addEventListener('mouseenter', textHoverIn);
+      t.addEventListener('mouseleave', textHoverOut);
+      t.addEventListener('click', textClick);
+    });
+  }
+
+  function exitTextEditMode(chartArea, svgEl, btn) {
+    chartArea.classList.remove('text-edit-mode');
+    btn.classList.remove('active');
+    svgEl.style.pointerEvents = '';
+    const banner = chartArea.querySelector('.text-edit-banner');
+    if (banner) banner.remove();
+    const overlay = chartArea.querySelector('.text-edit-overlay');
+    if (overlay) overlay.remove();
+
+    svgEl.querySelectorAll('text').forEach(t => {
+      t.style.cursor = '';
+      t.removeAttribute('stroke');
+      t.removeAttribute('stroke-width');
+      t.removeAttribute('paint-order');
+      if (t._origFill) t.setAttribute('fill', t._origFill);
+      t.removeEventListener('mouseenter', textHoverIn);
+      t.removeEventListener('mouseleave', textHoverOut);
+      t.removeEventListener('click', textClick);
+    });
+  }
+
+  function textHoverIn(e) {
+    const t = e.target.closest('text');
+    if (!t) return;
+    t.setAttribute('stroke', '#6C5CE7');
+    t.setAttribute('stroke-width', '0.5');
+    t.setAttribute('paint-order', 'stroke');
+  }
+  function textHoverOut(e) {
+    const t = e.target.closest('text');
+    if (!t) return;
+    t.removeAttribute('stroke');
+    t.removeAttribute('stroke-width');
+    t.removeAttribute('paint-order');
+  }
+  function textClick(e) {
+    e.stopPropagation();
+    const t = e.target.closest('text');
+    if (!t) return;
+    const chartArea = t.closest('.slide-chart-area');
+    if (!chartArea) return;
+
+    // 기존 오버레이 제거
+    const old = chartArea.querySelector('.text-edit-overlay');
+    if (old) old.remove();
+
+    // SVG 좌표 → 화면 좌표 변환
+    const svgEl = t.closest('svg');
+    const svgRect = svgEl.getBoundingClientRect();
+    const tRect = t.getBoundingClientRect();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'text-edit-overlay';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'text-edit-input';
+    input.value = t.textContent;
+
+    // 위치/크기 맞추기
+    const relTop = tRect.top - svgRect.top;
+    const relLeft = tRect.left - svgRect.left;
+    overlay.style.top = relTop + 'px';
+    overlay.style.left = relLeft + 'px';
+    overlay.style.width = Math.max(tRect.width + 24, 60) + 'px';
+    overlay.style.height = Math.max(tRect.height + 8, 28) + 'px';
+
+    // 폰트 크기 비율 계산
+    const svgFontSize = parseFloat(t.getAttribute('font-size') || 14);
+    const scaleRatio = svgRect.width / (parseFloat(svgEl.getAttribute('width')) || 1200);
+    input.style.fontSize = (svgFontSize * scaleRatio) + 'px';
+    input.style.fontWeight = t.getAttribute('font-weight') || '400';
+    input.style.textAlign = t.getAttribute('text-anchor') === 'end' ? 'right' : t.getAttribute('text-anchor') === 'middle' ? 'center' : 'left';
+
+    overlay.appendChild(input);
+    chartArea.querySelector('.chart-slide').appendChild(overlay);
+
+    input.focus();
+    input.select();
+
+    const apply = () => {
+      t.textContent = input.value;
+      overlay.remove();
+    };
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); apply(); }
+      if (ev.key === 'Escape') overlay.remove();
+    });
+    input.addEventListener('blur', apply);
+  }
+
+  // 프로젝트 자동 저장 (멀티 프로젝트)
+  function saveProject() {
+    try {
+      const projects = JSON.parse(localStorage.getItem('cs-projects') || '{}');
+      const id = currentProjectId || (currentProjectId = Date.now().toString(36));
+      projects[id] = {
+        name: projectName,
+        slideCount: slides.length,
+        updatedAt: new Date().toISOString(),
+        slides: slides
+      };
+      localStorage.setItem('cs-projects', JSON.stringify(projects));
+    } catch(e) { /* 용량 초과 등 무시 */ }
+  }
+
+  let currentProjectId = null;
+
+  // 프로젝트 불러오기
+  function loadProject(id) {
+    try {
+      const projects = JSON.parse(localStorage.getItem('cs-projects') || '{}');
+      const data = projects[id];
+      if (!data || !data.slides || data.slides.length === 0) return false;
+      currentProjectId = id;
+      projectName = data.name || '새 프로젝트';
+      slides.length = 0;
+      container.innerHTML = '';
+      data.slides.forEach(s => { slides.push(s); renderSlide(s); });
+      onboarding.style.display = 'none';
+      results.style.display = '';
+      updateProjectHeader();
+      return true;
+    } catch(e) { return false; }
+  }
+
+  // 저장된 프로젝트 목록 표시
+  function showSavedProjects() {
+    const el = document.getElementById('savedProjects');
+    if (!el) return;
+    try {
+      const projects = JSON.parse(localStorage.getItem('cs-projects') || '{}');
+      const entries = Object.entries(projects).sort((a,b) => (b[1].updatedAt||'').localeCompare(a[1].updatedAt||''));
+      if (entries.length === 0) { el.innerHTML = ''; return; }
+      el.innerHTML = `<div class="saved-projects-title">📁 저장된 프로젝트</div>` +
+        entries.map(([id, p]) => {
+          const date = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('ko') : '';
+          return `<div class="saved-project-item" data-id="${_h(id)}">
+            <span class="sp-icon">📊</span>
+            <div class="sp-info">
+              <div class="sp-name">${_h(p.name || '이름 없음')}</div>
+              <div class="sp-meta">${_h(p.slideCount || 0)}개 장표 · ${_h(date)}</div>
+            </div>
+            <button class="sp-delete" data-id="${_h(id)}" title="삭제">✕</button>
+          </div>`;
+        }).join('');
+      el.querySelectorAll('.saved-project-item').forEach(item => {
+        item.addEventListener('click', e => {
+          if (e.target.closest('.sp-delete')) return;
+          loadProject(item.dataset.id);
+        });
+      });
+      el.querySelectorAll('.sp-delete').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          if (!confirm('이 프로젝트를 삭제하시겠어요?')) return;
+          const projects = JSON.parse(localStorage.getItem('cs-projects') || '{}');
+          delete projects[btn.dataset.id];
+          localStorage.setItem('cs-projects', JSON.stringify(projects));
+          showSavedProjects();
+        });
+      });
+    } catch(e) { el.innerHTML = ''; }
+  }
+
+  function updateProjectHeader() {
+    const nameEl = document.getElementById('projectName');
+    if (nameEl) nameEl.textContent = projectName;
+    const countEl = document.getElementById('slideCount');
+    if (countEl) countEl.textContent = slides.length + '개 장표';
+    // 네비게이션 도트 업데이트
+    const nav = document.getElementById('slideNav');
+    if (nav) {
+      nav.innerHTML = slides.map((s, i) => `<button class="slide-nav-dot" data-idx="${i}" title="장표 ${i+1}"></button>`).join('');
+      nav.querySelectorAll('.slide-nav-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+          const idx = Number(dot.dataset.idx);
+          const wrappers = container.querySelectorAll('.slide-wrapper');
+          if (wrappers[idx]) wrappers[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+      // 스크롤 위치에 따라 active 도트 업데이트
+      updateActiveDot();
+    }
+  }
+
+  function updateActiveDot() {
+    const wrappers = container.querySelectorAll('.slide-wrapper');
+    const dots = document.querySelectorAll('.slide-nav-dot');
+    if (!wrappers.length || !dots.length) return;
+
+    let closestIdx = 0, closestDist = Infinity;
+    const viewCenter = window.innerHeight / 2;
+    wrappers.forEach((w, i) => {
+      const rect = w.getBoundingClientRect();
+      const dist = Math.abs(rect.top + rect.height/2 - viewCenter);
+      if (dist < closestDist) { closestDist = dist; closestIdx = i; }
+    });
+    dots.forEach((d, i) => d.classList.toggle('active', i === closestIdx));
+  }
+
+  // 스크롤 시 active 도트 업데이트
+  window.addEventListener('scroll', () => requestAnimationFrame(updateActiveDot));
+
+  // ── 파일 업로드 ──
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value=''; });
+  addFileInput.addEventListener('change', e => { handleFiles(e.target.files); addFileInput.value=''; });
+  document.getElementById('addFileBottom').addEventListener('change', e => { handleFiles(e.target.files); e.target.value=''; });
+  homeBtn.addEventListener('click', () => {
+    if (!confirm('새 프로젝트를 시작하시겠어요? 현재 장표가 모두 사라져요.')) return;
+    slides.length = 0;
+    projectName = '새 프로젝트';
+    currentProjectId = null;
+    container.innerHTML = '';
+    results.style.display = 'none';
+    onboarding.style.display = '';
+    showSavedProjects();
+  });
+
+  function handleFiles(files) {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    Array.from(files).forEach(file => {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (!['csv', 'xlsx', 'xls'].includes(ext)) return;
+      if (file.size > MAX_FILE_SIZE) { alert('파일이 너무 커요 (최대 10MB): ' + file.name); return; }
+
+      if (ext === 'csv') {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const parsed = Parser.parseFile(e.target.result);
+          if (!parsed) { console.warn('파싱 실패:', file.name); return; }
+          addSlide(parsed);
+        };
+        reader.readAsText(file, 'UTF-8');
+      } else {
+        // xlsx/xls
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const wb = XLSX.read(e.target.result, { type: 'array' });
+            wb.SheetNames.forEach(name => {
+              const sheet = wb.Sheets[name];
+              const csv = XLSX.utils.sheet_to_csv(sheet);
+              const parsed = Parser.parseFile(csv);
+              if (parsed) addSlide(parsed);
+            });
+          } catch(err) { console.warn('엑셀 파싱 실패:', file.name, err); }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    });
+  }
+
+  // ── 슬라이드 추가 (데이터 많으면 범위 선택) ──
+  const MAX_ROWS = 15; // 1200×750에 깔끔하게 들어가는 최대 행 수
+
+  function addSlide(parsed) {
+    onboarding.style.display = 'none';
+    results.style.display = '';
+
+    const needsRange = (parsed.chartKind === 'heatmap' || parsed.chartKind === 'table') && parsed.data.length > MAX_ROWS;
+
+    if (needsRange) {
+      openRangeModal(parsed);
+    } else {
+      createAndRender(parsed, 0, parsed.data.length - 1);
+    }
+  }
+
+  function createAndRender(parsed, startIdx, endIdx) {
+    const slicedData = parsed.data.slice(startIdx, endIdx + 1);
+    const slicedParsed = { ...parsed, data: slicedData };
+
+    const slide = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      parsed: slicedParsed,
+      fullParsed: parsed,
+      chartKind: parsed.chartKind,
+      title: parsed.meta.reportType.split('>').pop().trim() || '차트',
+      subtitle: '',
+      filterInfo: parsed.meta.filterInfo || '',
+      source: '',
+      colors: [...T.SERIES],
+      iconUrls: {},
+      visibleCols: null,
+      bubbleGroups: null,
+      transposed: false, // true면 행/열 전환
+      rangeStart: startIdx,
+      rangeEnd: endIdx,
+      showValueLabels: null, // null = 전체 표시, 배열이면 시리즈 인덱스별 on/off
+    };
+    slides.push(slide);
+    renderSlide(slide);
+    updateProjectHeader();
+    saveProject();
+  }
+
+  // ── 범위 선택 모달 ──
+  function openRangeModal(parsed) {
+    const old = document.getElementById('rangeModal');
+    if (old) old.remove();
+
+    const data = parsed.data;
+    const total = data.length;
+    const recEnd = Math.min(MAX_ROWS - 1, total - 1);
+
+    const options = data.map((r, i) =>
+      `<option value="${i}">${_h(r[0] || '행 ' + (i+1))}</option>`
+    ).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'rangeModal';
+    modal.className = 'range-modal';
+
+    // 항목 유형 자동 파악
+    const firstH = parsed.headers[0] || '';
+    const sampleV = data.slice(0, 3).map(r => r[0] || '');
+    let rangeItemType = '항목';
+    if (sampleV.some(v => /\d{4}[-\/\.]/.test(v))) rangeItemType = '기간';
+    else if (firstH.includes('앱') || firstH.includes('이름')) rangeItemType = '앱';
+    else if (firstH.includes('순위')) rangeItemType = '순위';
+    else if (firstH.includes('분류')) rangeItemType = '분류';
+    else rangeItemType = firstH || '항목';
+
+    modal.innerHTML = `
+      <div class="range-panel">
+        <h3>📋 표시할 ${_h(rangeItemType)} 선택</h3>
+        <p>${_h(rangeItemType)}이 ${total}개예요. 1200×750 장표에 맞게 범위를 선택해주세요.<br>
+        <span style="color:var(--accent);font-weight:600">추천: ${MAX_ROWS}개 이하</span></p>
+        <div class="range-row">
+          <label>시작</label>
+          <select id="rangeStart">${options}</select>
+        </div>
+        <div class="range-row">
+          <label>끝</label>
+          <select id="rangeEnd">${options}</select>
+        </div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px" id="rangeCount">선택: ${recEnd + 1}행</div>
+        <div class="range-actions">
+          <button class="range-btn-secondary" id="rangeAll">전체 (${total}개)</button>
+          <button class="range-btn-primary" id="rangeApply">적용</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const startSel = document.getElementById('rangeStart');
+    const endSel = document.getElementById('rangeEnd');
+    const countEl = document.getElementById('rangeCount');
+    endSel.value = recEnd;
+
+    const updateCount = () => {
+      const s = Number(startSel.value), e = Number(endSel.value);
+      const cnt = Math.abs(e - s) + 1;
+      const warn = cnt > MAX_ROWS ? ' ⚠️ 폰트가 작아질 수 있어요' : ' ✅';
+      countEl.innerHTML = `${cnt}개 선택${warn}`;
+    };
+    startSel.addEventListener('change', updateCount);
+    endSel.addEventListener('change', updateCount);
+
+    document.getElementById('rangeApply').addEventListener('click', () => {
+      const s = Number(startSel.value), e = Number(endSel.value);
+      modal.remove();
+      createAndRender(parsed, Math.min(s,e), Math.max(s,e));
+    });
+
+    document.getElementById('rangeAll').addEventListener('click', () => {
+      modal.remove();
+      createAndRender(parsed, 0, total - 1);
+    });
+  }
+
+  // ── 슬라이드 렌더 ──
+  function renderSlide(slide) {
+    // 래퍼: 차트 + 에디터 패널을 감싸는 flex 컨테이너
+    const wrapper = document.createElement('div');
+    wrapper.className = 'slide-wrapper';
+    wrapper.dataset.slideId = slide.id;
+    wrapper.style.opacity = '0'; wrapper.style.transform = 'translateY(20px)';
+
+    const chartArea = document.createElement('div');
+    chartArea.className = 'slide-chart-area';
+
+    const el = buildChart(slide);
+    el.dataset.slideId = slide.id;
+    chartArea.appendChild(el);
+
+    // 장표 번호 라벨
+    const slideNum = document.createElement('div');
+    slideNum.className = 'slide-number';
+    slideNum.textContent = '장표 ' + (slides.indexOf(slide) + 1);
+    chartArea.appendChild(slideNum);
+
+    // 다운로드 + 편집 버튼 오버레이
+    const actions = document.createElement('div');
+    actions.className = 'slide-actions';
+    actions.innerHTML = `
+      <button class="slide-action-btn text-edit-btn" title="텍스트 수정">Aa 텍스트 수정</button>
+      <button class="slide-action-btn edit-btn" title="장표 설정">⚙️ 설정</button>
+      <button class="slide-action-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
+      <button class="slide-action-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
+      <button class="slide-action-btn del-btn" title="삭제">🗑️</button>
+    `;
+    chartArea.style.position = 'relative';
+    chartArea.appendChild(actions);
+
+    wrapper.appendChild(chartArea);
+
+    // 텍스트 수정 모드 토글
+    actions.querySelector('.text-edit-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleTextEditMode(el, chartArea, actions.querySelector('.text-edit-btn'));
+    });
+
+    // 편집 버튼 → 인라인 에디터 토글
+    actions.querySelector('.edit-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      try { toggleInlineEditor(slide, wrapper); } catch(err) { alert('에디터 오류: ' + err.message); console.error(err); }
+    });
+    // PNG 다운로드
+    actions.querySelector('.dl-png-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const svgEl = el.querySelector('svg');
+      const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
+      prep.then(() => html2canvas(el, { scale: 3, backgroundColor: '#F8F8F8', useCORS: true })).then(c => {
+        c.toBlob(b => { if(b) { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`${slide.title}.png`; a.click(); } }, 'image/png');
+      });
+    });
+    // SVG 다운로드
+    actions.querySelector('.dl-svg-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const svgEl = el.querySelector('svg');
+      if (!svgEl) { alert('SVG 차트만 다운로드 가능합니다.'); return; }
+      inlineSvgImages(svgEl).then(() => {
+        const str = new XMLSerializer().serializeToString(svgEl);
+        const blob = new Blob([str], {type:'image/svg+xml'});
+        const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${slide.title}.svg`; a.click();
+      });
+    });
+    // 장표 삭제
+    actions.querySelector('.del-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      if (!confirm('이 장표를 삭제하시겠어요?')) return;
+      const idx = slides.indexOf(slide);
+      if (idx >= 0) slides.splice(idx, 1);
+      wrapper.style.transition = 'opacity 0.3s, transform 0.3s';
+      wrapper.style.opacity = '0'; wrapper.style.transform = 'translateY(-10px)';
+      setTimeout(() => { wrapper.remove(); updateProjectHeader(); saveProject(); }, 300);
+      if (slides.length === 0) {
+        results.style.display = 'none';
+        onboarding.style.display = '';
+        localStorage.removeItem('cs-project');
+      }
+    });
+
+    container.appendChild(wrapper);
+    requestAnimationFrame(() => { wrapper.style.transition='opacity 0.5s, transform 0.5s'; wrapper.style.opacity='1'; wrapper.style.transform='translateY(0)'; });
+
+    // 아이콘 로드 실패 감지 (scatter 차트)
+    if (slide.chartKind === 'scatter') {
+      setTimeout(() => {
+        const images = el.querySelectorAll('svg image');
+        if (images.length === 0) return;
+        let failCount = 0, checked = 0;
+        images.forEach(img => {
+          const testImg = new Image();
+          testImg.onload = () => { if (testImg.naturalWidth < 32 || testImg.naturalHeight < 32) failCount++; checked++; checkDone(); };
+          testImg.onerror = () => { failCount++; checked++; checkDone(); };
+          testImg.src = img.getAttribute('href');
+        });
+        function checkDone() {
+          if (checked < images.length) return;
+          if (failCount > 0) {
+            const tip = document.createElement('div');
+            tip.className = 'icon-tip';
+            tip.innerHTML = `⚠️ 앱 아이콘이 안 보이시나요? <button class="icon-tip-btn">✏️ 여기서 직접 등록</button>`;
+            tip.querySelector('.icon-tip-btn').addEventListener('click', () => { tip.remove(); toggleInlineEditor(slide, wrapper); });
+            chartArea.appendChild(tip);
+          }
+        }
+      }, 500);
+    }
+  }
+
+  // ── 차트 리렌더 (에디터에서 실시간 업데이트) ──
+  function rerenderChart(slide, wrapper) {
+    const chartArea = wrapper.querySelector('.slide-chart-area');
+    const oldChart = chartArea.querySelector('.chart-slide');
+    const oldActions = chartArea.querySelector('.slide-actions');
+    const oldTip = chartArea.querySelector('.icon-tip');
+
+    SvgCharts._filterInfo = slide.filterInfo || '';
+    const newEl = buildChart(slide);
+    newEl.dataset.slideId = slide.id;
+
+    if (oldChart) oldChart.replaceWith(newEl);
+    // actions와 tip은 유지
+  }
+
+  // ── 인라인 에디터 (오른쪽 패널) ──
+  function toggleInlineEditor(slide, wrapper) {
+    const existing = wrapper.querySelector('.inline-editor');
+    if (existing) {
+      existing.remove();
+      wrapper.classList.remove('editing');
+      wrapper.style.transform = '';
+      return;
+    }
+
+    wrapper.style.transform = '';
+    wrapper.classList.add('editing');
+    const panel = document.createElement('div');
+    panel.className = 'inline-editor';
+
+    const fullData = slide.fullParsed ? slide.fullParsed.data : slide.parsed.data;
+    const allHeaders = slide.parsed.headers;
+
+    const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
+    const recommended = T.RECOMMENDED[dataType] || [];
+    const kindOptions = buildKindOptionsHTML(slide.chartKind, recommended);
+
+    // 항목 유형 자동 파악
+    const firstColName = allHeaders[0] || '항목';
+    const sampleVals = fullData.slice(0, 3).map(r => r[0] || '');
+    let itemType = '항목';
+    if (sampleVals.some(v => /\d{4}[-\/\.]/.test(v))) itemType = '기간';
+    else if (/앱|이름/i.test(firstColName)) itemType = '앱';
+    else if (firstColName.includes('순위')) itemType = '순위';
+    else if (firstColName.includes('분류')) itemType = '분류';
+    else itemType = firstColName || '항목';
+
+    const hasRange = fullData.length > 1;
+    const rangeOptions = fullData.map((r, i) => `<option value="${i}">${_h(r[0] || (i+1))}</option>`).join('');
+    const curStart = slide.rangeStart || 0;
+    const curEnd = slide.rangeEnd != null ? slide.rangeEnd : fullData.length - 1;
+
+    // 시리즈 이름 추출 (아이콘 URL 입력용)
+    const ieSeriesNames = [];
+    if (slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare') {
+      const ni = allHeaders.findIndex(h => h.includes('앱') || h.includes('이름'));
+      fullData.forEach(r => ieSeriesNames.push(r[ni >= 0 ? ni : 0] || ''));
+    }
+
+    // ── 역할 정의 ──
+    const colRoleOpts = { label: '라벨', value: '값', series: '시리즈', ignore: '무시' };
+    const rowRoleOpts = { data: '데이터', ignore: '무시' };
+    const roleColors = { label: '#6C5CE7', value: '#00B894', series: '#FDCB6E', ignore: '#B2BEC3', data: '#00B894' };
+
+    // 초기화: 열 역할
+    if (!slide.colRoles || slide.colRoles.length !== allHeaders.length) {
+      slide.colRoles = allHeaders.map((_, i) => i === 0 ? 'label' : 'value');
+    }
+    // 초기화: 행 역할
+    if (!slide.rowRoles || slide.rowRoles.length !== fullData.length) {
+      slide.rowRoles = fullData.map(() => 'data');
+    }
+
+    // ── 미리보기 테이블 HTML ──
+    const maxPreviewRows = 10;
+    const previewRows = fullData.slice(0, maxPreviewRows);
+    const previewColCount = Math.min(allHeaders.length, 5);
+    const truncatedCols = allHeaders.length > previewColCount;
+    const truncatedRows = fullData.length > maxPreviewRows;
+
+    // 열 역할 드롭다운 행
+    const colRoleRowHTML = `<tr class="ie-preview-role-row">
+      <th class="ie-row-role-corner"></th>
+      ${allHeaders.slice(0, previewColCount).map((_, ci) => {
+        const r = slide.colRoles[ci] || 'value';
+        return `<th><select class="ie-col-role" data-col="${ci}" style="border-color:${roleColors[r]};color:${roleColors[r]}">
+          ${Object.entries(colRoleOpts).map(([k,v]) => `<option value="${k}" ${r===k?'selected':''}>${v}</option>`).join('')}
+        </select></th>`;
+      }).join('')}
+      ${truncatedCols ? '<th></th>' : ''}
+    </tr>`;
+
+    // 헤더 행
+    const headerRowHTML = `<tr>
+      <th class="ie-row-role-corner ie-row-role-label">행</th>
+      ${allHeaders.slice(0, previewColCount).map((h, ci) => {
+        const r = slide.colRoles[ci] || 'value';
+        return `<th class="ie-preview-th" data-role="${r}" data-ci="${ci}">${_h(h)}</th>`;
+      }).join('')}
+      ${truncatedCols ? `<th class="ie-preview-th ie-preview-more">+${allHeaders.length - previewColCount}</th>` : ''}
+    </tr>`;
+
+    // 데이터 행 (왼쪽에 행 역할 태그)
+    const dataRowsHTML = previewRows.map((row, ri) => {
+      const rr = slide.rowRoles[ri] || 'data';
+      return `<tr data-row="${ri}" data-rowrole="${rr}">
+        <td class="ie-row-role-cell">
+          <button class="ie-row-tag" data-row="${ri}" data-role="${rr}" style="background:${rr==='data' ? roleColors.data : roleColors.ignore}">${rr==='data'?'✓':'✕'}</button>
+        </td>
+        ${row.slice(0, previewColCount).map((cell, ci) => {
+          const cr = slide.colRoles[ci] || 'value';
+          return `<td class="ie-preview-td" data-role="${cr}" data-rowrole="${rr}">${_h(cell || '')}</td>`;
+        }).join('')}
+        ${truncatedCols ? '<td class="ie-preview-td ie-preview-more">…</td>' : ''}
+      </tr>`;
+    }).join('');
+
+    const moreRowHTML = truncatedRows
+      ? `<tr><td class="ie-row-role-cell"></td><td class="ie-preview-td ie-preview-more" colspan="${previewColCount + (truncatedCols?1:0)}">… 외 ${fullData.length - maxPreviewRows}행</td></tr>`
+      : '';
+
+    const previewHTML = `<div class="ie-preview-wrap">
+      <div class="ie-preview-scroll">
+        <table class="ie-preview-table">
+          <thead>${colRoleRowHTML}${headerRowHTML}</thead>
+          <tbody>${dataRowsHTML}${moreRowHTML}</tbody>
+        </table>
+      </div>
+      <div class="ie-preview-legend">
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#6C5CE7"></span>라벨</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#00B894"></span>값</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#FDCB6E"></span>시리즈</span>
+        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#B2BEC3"></span>무시</span>
+      </div>
+    </div>`;
+
+    // 무시된 행/열 카운트
+    const ignoredCols = slide.colRoles.filter(r => r === 'ignore').length;
+    const ignoredRows = slide.rowRoles.filter(r => r === 'ignore').length;
+    const summaryParts = [];
+    if (ignoredCols > 0) summaryParts.push(`${ignoredCols}열 무시`);
+    if (ignoredRows > 0) summaryParts.push(`${ignoredRows}행 무시`);
+    const summaryText = summaryParts.length > 0 ? summaryParts.join(', ') : '전체 사용 중';
+
+    panel.innerHTML = `
+      <div class="ie-header">
+        <span>장표 설정</span>
+        <button class="ie-close">✕</button>
+      </div>
+      <div class="ie-body">
+        <div class="ie-field">
+          <label>차트 유형</label>
+          <div class="kind-grid">${kindOptions}</div>
+        </div>
+        <div class="ie-field">
+          <label>타이틀</label>
+          <input type="text" class="ie-input" data-key="title" value="${_h(slide.title)}">
+        </div>
+        <div class="ie-field">
+          <label>부제목</label>
+          <input type="text" class="ie-input" data-key="subtitle" value="${_h(slide.subtitle||'')}">
+        </div>
+        <div class="ie-field">
+          <label>출처</label>
+          <input type="text" class="ie-input" data-key="source" value="${_h(slide.source||'')}" placeholder="선택">
+        </div>
+        <div class="ie-field">
+          <label>필터 정보</label>
+          <input type="text" class="ie-input" data-key="filterInfo" value="${_h(slide.filterInfo||'')}">
+        </div>
+        ${(() => {
+          // 값 라벨 표시 토글 (라인/세로바/콤보 등 시리즈가 있는 차트)
+          const vlKind = slide.chartKind;
+          const vlTypes = ['line','verticalBar','combo','stackedBar'];
+          if (!vlTypes.includes(vlKind)) return '';
+          const vlNames = [];
+          if (vlKind === 'line' || vlKind === 'verticalBar' || vlKind === 'stackedBar') {
+            for (let i = 1; i < allHeaders.length; i++) {
+              if (fullData.some(r => !isNaN(Number(r[i])))) vlNames.push({ idx: i - 1, name: allHeaders[i] });
+            }
+          } else if (vlKind === 'combo') {
+            vlNames.push({ idx: 0, name: allHeaders[1] || '막대' });
+            vlNames.push({ idx: 1, name: allHeaders[2] || '꺾은선' });
+          }
+          if (vlNames.length === 0) return '';
+          if (!slide.showValueLabels) slide.showValueLabels = vlNames.map(() => true);
+          while (slide.showValueLabels.length < vlNames.length) slide.showValueLabels.push(true);
+          const items = vlNames.map(v => {
+            const on = slide.showValueLabels[v.idx] !== false;
+            return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:2px 0">
+              <input type="checkbox" class="ie-vl-check" data-si="${v.idx}" ${on ? 'checked' : ''} style="accent-color:var(--accent);width:15px;height:15px">
+              <span style="${on ? '' : 'opacity:0.4'}">${v.name}</span>
+            </label>`;
+          }).join('');
+          return `<div class="ie-field">
+            <label>값 라벨 표시</label>
+            <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
+          </div>`;
+        })()}
+        <div class="ie-field">
+          <div class="ie-preview-header-row">
+            <label>📋 데이터 미리보기 <span class="ie-preview-summary">${summaryText}</span></label>
+            <button class="ie-expand-btn" title="전체 데이터 보기">🔍 확대</button>
+          </div>
+          <div class="ie-role-callout">
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#6C5CE7"></span><span class="ie-callout-name">라벨</span> 차트의 항목 이름 (X축, 범례)</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#00B894"></span><span class="ie-callout-name">값</span> 차트에 표시할 숫자 데이터</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#FDCB6E"></span><span class="ie-callout-name">시리즈</span> 여러 선/막대를 구분하는 그룹</div>
+            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#B2BEC3"></span><span class="ie-callout-name">무시</span> 차트에서 제외</div>
+          </div>
+          <div class="ie-preview-hint">셀을 클릭하면 차트에서 위치를 확인할 수 있어요</div>
+          ${previewHTML}
+        </div>
+        ${slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare' ? `
+        <div class="ie-field">
+          <label>앱 아이콘 URL</label>
+          <div style="display:flex;flex-direction:column;gap:6px" class="ie-icon-url-list">
+            ${ieSeriesNames.map((name, i) => `
+              <div style="display:flex;align-items:center;gap:6px">
+                ${slide.iconUrls[name] ? `<img src="${_safeUrl(slide.iconUrls[name])}" width="20" height="20" style="border-radius:4px">` : `<div style="width:20px;height:20px;border-radius:4px;background:#EEE;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">${_h(name.charAt(0))}</div>`}
+                <input type="text" class="ie-input ie-icon-url-input" data-name="${_h(name)}" value="${_h(slide.iconUrls[name]||'')}" placeholder="${_h(name)} 아이콘 URL" style="flex:1;font-size:11px">
+              </div>
+            `).join('')}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">이미지 URL을 붙여넣으세요 (비워두면 자동 감지)</div>
+        </div>` : ''}
+        ${hasRange ? `
+        <div class="ie-field">
+          <button class="ie-transpose" data-active="${slide.transposed}">🔄 행/열 바꾸기 ${slide.transposed?'(전환됨)':''}</button>
+        </div>
+        <div class="ie-field">
+          <label>표시할 ${itemType} (${fullData.length}개)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="ie-select" data-key="rangeStart">${rangeOptions}</select>
+            <span style="color:var(--text-muted)">~</span>
+            <select class="ie-select" data-key="rangeEnd">${rangeOptions}</select>
+          </div>
+        </div>` : ''}
+      </div>
+    `;
+
+    wrapper.appendChild(panel);
+
+    // 에디터 높이를 차트 높이에 맞추기
+    requestAnimationFrame(() => {
+      const chartEl = wrapper.querySelector('.chart-slide');
+      if (chartEl) {
+        const h = chartEl.offsetHeight;
+        panel.style.height = h + 'px';
+        panel.style.maxHeight = h + 'px';
+      }
+    });
+
+    // 닫기
+    panel.querySelector('.ie-close').addEventListener('click', () => {
+      panel.remove();
+      wrapper.classList.remove('editing');
+      wrapper.style.transform = '';
+    });
+
+    // 범위 초기값
+    if (hasRange) {
+      panel.querySelector('[data-key="rangeStart"]').value = curStart;
+      panel.querySelector('[data-key="rangeEnd"]').value = curEnd;
+    }
+
+    // 요약 텍스트 업데이트 헬퍼
+    const updateSummary = () => {
+      const ic = slide.colRoles.filter(r => r === 'ignore').length;
+      const ir = slide.rowRoles.filter(r => r === 'ignore').length;
+      const parts = [];
+      if (ic > 0) parts.push(`${ic}열 무시`);
+      if (ir > 0) parts.push(`${ir}행 무시`);
+      const el = panel.querySelector('.ie-preview-summary');
+      if (el) el.textContent = parts.length > 0 ? parts.join(', ') : '전체 사용 중';
+    };
+
+    // 실시간 업데이트 함수
+    const liveUpdate = () => {
+      panel.querySelectorAll('.ie-input:not(.ie-icon-url-input)').forEach(inp => { slide[inp.dataset.key] = inp.value; });
+      // 아이콘 URL 업데이트
+      panel.querySelectorAll('.ie-icon-url-input').forEach(inp => {
+        const name = inp.dataset.name;
+        const url = _safeUrl(inp.value);
+        if (url) slide.iconUrls[name] = url;
+        else delete slide.iconUrls[name];
+      });
+      const activeKind = panel.querySelector('.kind-btn.active');
+      if (activeKind) slide.chartKind = activeKind.dataset.kind;
+      // 범위
+      if (hasRange) {
+        const s = Number(panel.querySelector('[data-key="rangeStart"]').value);
+        const e = Number(panel.querySelector('[data-key="rangeEnd"]').value);
+        slide.rangeStart = Math.min(s, e);
+        slide.rangeEnd = Math.max(s, e);
+        const baseParsed = slide.fullParsed || slide.parsed;
+        slide.parsed = { ...baseParsed, data: baseParsed.data.slice(slide.rangeStart, slide.rangeEnd + 1) };
+      }
+      updateSummary();
+      rerenderChart(slide, wrapper);
+      saveProject();
+    };
+
+    // 이벤트 바인딩
+    panel.querySelectorAll('.ie-input').forEach(inp => inp.addEventListener('input', liveUpdate));
+    panel.querySelectorAll('.ie-select').forEach(sel => sel.addEventListener('change', liveUpdate));
+
+    // 값 라벨 토글
+    panel.querySelectorAll('.ie-vl-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const si = Number(cb.dataset.si);
+        if (!slide.showValueLabels) slide.showValueLabels = [];
+        slide.showValueLabels[si] = cb.checked;
+        const span = cb.parentElement.querySelector('span');
+        if (span) span.style.opacity = cb.checked ? '1' : '0.4';
+        liveUpdate();
+      });
+    });
+
+    // 차트 유형 버튼
+    panel.querySelectorAll('.kind-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        panel.querySelectorAll('.kind-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        liveUpdate();
+      });
+    });
+
+    // 행/열 바꾸기
+    const transposeBtn = panel.querySelector('.ie-transpose');
+    if (transposeBtn) {
+      transposeBtn.addEventListener('click', () => {
+        slide.transposed = !slide.transposed;
+        transposeBtn.dataset.active = slide.transposed;
+        transposeBtn.textContent = '🔄 행/열 바꾸기 ' + (slide.transposed ? '(전환됨)' : '');
+        liveUpdate();
+      });
+    }
+
+    // ── 열 역할 선택 ──
+    panel.querySelectorAll('.ie-col-role').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const ci = Number(sel.dataset.col);
+        const role = sel.value;
+        slide.colRoles[ci] = role;
+        sel.style.borderColor = roleColors[role];
+        sel.style.color = roleColors[role];
+        // 헤더 셀 업데이트
+        const th = panel.querySelector(`.ie-preview-th[data-ci="${ci}"]`);
+        if (th) th.dataset.role = role;
+        // 데이터 셀 업데이트
+        panel.querySelectorAll(`.ie-preview-table tbody tr[data-row]`).forEach(tr => {
+          const tds = tr.querySelectorAll('.ie-preview-td');
+          if (tds[ci]) tds[ci].dataset.role = role;
+        });
+        liveUpdate();
+      });
+    });
+
+    // ── 행 역할 토글 (✓ ↔ ✕) ──
+    panel.querySelectorAll('.ie-row-tag').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ri = Number(btn.dataset.row);
+        const cur = slide.rowRoles[ri] || 'data';
+        const next = cur === 'data' ? 'ignore' : 'data';
+        slide.rowRoles[ri] = next;
+        btn.dataset.role = next;
+        btn.textContent = next === 'data' ? '✓' : '✕';
+        btn.style.background = next === 'data' ? roleColors.data : roleColors.ignore;
+        const tr = panel.querySelector(`tr[data-row="${ri}"]`);
+        if (tr) {
+          tr.dataset.rowrole = next;
+          tr.querySelectorAll('.ie-preview-td').forEach(td => td.dataset.rowrole = next);
+        }
+        liveUpdate();
+      });
+    });
+
+    // ── 차트 내 데이터 위치 하이라이트 헬퍼 ──
+    function highlightInChart(ri, ci, sourceEl) {
+      // 이전 하이라이트 제거
+      wrapper.querySelectorAll('.chart-hl-box').forEach(el => el.remove());
+      wrapper.querySelectorAll('.chart-highlight-pulse').forEach(el => el.remove());
+      if (sourceEl) {
+        const root = sourceEl.closest('.ie-preview-table, .dm-table') || panel;
+        root.querySelectorAll('.ie-cell-active').forEach(el => el.classList.remove('ie-cell-active'));
+        sourceEl.classList.add('ie-cell-active');
+      }
+
+      const chartEl = wrapper.querySelector('.chart-slide');
+      if (!chartEl) return;
+      const svgEl = chartEl.querySelector('svg');
+      if (!svgEl) return;
+
+      const cellValue = fullData[ri] ? String(fullData[ri][ci] || '').trim() : '';
+      const rowLabel = fullData[ri] ? String(fullData[ri][0] || '').trim() : '';
+      const colHeader = allHeaders[ci] || '';
+      const colRole = slide.colRoles ? slide.colRoles[ci] : 'value';
+      if (!cellValue) return;
+
+      // SVG 좌표 → DOM 좌표 변환
+      const svgRect = svgEl.getBoundingClientRect();
+      const chartRect = chartEl.getBoundingClientRect();
+      const vb = svgEl.viewBox.baseVal;
+      const scaleX = svgRect.width / (vb.width || 1200);
+      const scaleY = svgRect.height / (vb.height || 750);
+      const offsetX = svgRect.left - chartRect.left;
+      const offsetY = svgRect.top - chartRect.top;
+
+      // 숫자 포맷 변형 생성 (차트에서 포맷된 값과 매칭)
+      const numVal = Number(cellValue);
+      const matchTexts = [cellValue];
+      if (!isNaN(numVal)) {
+        matchTexts.push(T.fmt(numVal));
+        matchTexts.push(T.fmtTick(numVal));
+        matchTexts.push(numVal.toLocaleString());
+        matchTexts.push(numVal.toFixed(1));
+        matchTexts.push(String(Math.round(numVal)));
+        // 퍼센트
+        matchTexts.push(numVal.toFixed(1) + '%');
+        matchTexts.push(Math.round(numVal) + '%');
+      }
+
+      let found = false;
+      chartEl.style.position = 'relative';
+
+      // SVG 내 모든 text 요소에서 매칭 검색
+      const textEls = svgEl.querySelectorAll('text');
+      textEls.forEach(txt => {
+        const content = txt.textContent.trim();
+        const isMatch = matchTexts.some(m => m && content === m);
+        // 라벨 열이면 라벨 텍스트도 매칭
+        const isLabelMatch = colRole === 'label' && content === cellValue;
+        if (!isMatch && !isLabelMatch) return;
+
+        // 이 텍스트의 SVG bbox → DOM 좌표
+        try {
+          const bbox = txt.getBBox();
+          const box = document.createElement('div');
+          box.className = 'chart-hl-box';
+          const pad = 4;
+          box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
+          box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
+          box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
+          box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
+          box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+          chartEl.appendChild(box);
+          found = true;
+        } catch(e) {}
+      });
+
+      // rect 요소도 검색 (막대 차트 — 높이/위치로 매칭은 어려우니 인접 텍스트 기반)
+      // 이미 text 매칭으로 충분하지만, 못 찾았으면 라벨 기반으로 관련 rect 찾기
+      if (!found && rowLabel) {
+        textEls.forEach(txt => {
+          if (txt.textContent.trim() !== rowLabel) return;
+          try {
+            const bbox = txt.getBBox();
+            const box = document.createElement('div');
+            box.className = 'chart-hl-box';
+            const pad = 4;
+            box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
+            box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
+            box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
+            box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
+            box.style.borderColor = '#6C5CE7';
+            chartEl.appendChild(box);
+            found = true;
+          } catch(e) {}
+        });
+      }
+
+      // 하단 툴팁도 표시
+      const roleName = colRole === 'label' ? '라벨' : colRole === 'value' ? '값' : colRole === 'series' ? '시리즈' : '무시';
+      const tooltip = document.createElement('div');
+      tooltip.className = 'chart-highlight-pulse';
+      tooltip.innerHTML = `<span class="hl-dot" style="background:${roleColors[colRole]}"></span>
+        <span class="hl-text">"${_h(cellValue)}" → ${roleName} · ${_h(rowLabel || '행 '+(ri+1))}</span>`;
+      chartEl.appendChild(tooltip);
+
+      // 4초 후 자동 제거
+      setTimeout(() => {
+        wrapper.querySelectorAll('.chart-hl-box').forEach(el => el.remove());
+        tooltip.remove();
+        if (sourceEl) sourceEl.classList.remove('ie-cell-active');
+      }, 4000);
+    }
+
+    // ── 셀 클릭 → 차트 하이라이트 ──
+    panel.querySelectorAll('.ie-preview-td[data-role]:not(.ie-preview-more)').forEach(td => {
+      td.addEventListener('click', () => {
+        const tr = td.closest('tr');
+        const ri = tr ? Number(tr.dataset.row) : -1;
+        const ci = Array.from(td.parentElement.children).indexOf(td) - 1;
+        if (ri < 0 || ci < 0) return;
+        highlightInChart(ri, ci, td);
+      });
+    });
+
+    // ── 확대 모달 (분할 뷰: 왼쪽 차트 + 오른쪽 데이터) ──
+    const expandBtn = panel.querySelector('.ie-expand-btn');
+    if (expandBtn) {
+      expandBtn.addEventListener('click', () => {
+        const old = document.getElementById('dataExpandModal');
+        if (old) old.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'dataExpandModal';
+        modal.className = 'data-expand-modal';
+
+        // 전체 데이터 테이블 생성
+        const allColCount = allHeaders.length;
+        const colRoleRow = allHeaders.map((_, ci) => {
+          const r = slide.colRoles[ci] || 'value';
+          return `<th><select class="ie-col-role dm-col-role" data-col="${ci}" style="border-color:${roleColors[r]};color:${roleColors[r]}">
+            ${Object.entries(colRoleOpts).map(([k,v]) => `<option value="${k}" ${r===k?'selected':''}>${v}</option>`).join('')}
+          </select></th>`;
+        }).join('');
+
+        const headerRow = allHeaders.map((h, ci) => {
+          const r = slide.colRoles[ci] || 'value';
+          return `<th class="ie-preview-th" data-role="${r}" data-ci="${ci}">${_h(h)}</th>`;
+        }).join('');
+
+        const bodyRows = fullData.map((row, ri) => {
+          const rr = slide.rowRoles[ri] || 'data';
+          return `<tr data-row="${ri}" data-rowrole="${rr}">
+            <td class="ie-row-role-cell">
+              <button class="ie-row-tag dm-row-tag" data-row="${ri}" data-role="${rr}" style="background:${rr==='data'?roleColors.data:roleColors.ignore}">${rr==='data'?'✓':'✕'}</button>
+            </td>
+            ${row.map((cell, ci) => {
+              const cr = slide.colRoles[ci] || 'value';
+              return `<td class="ie-preview-td dm-cell" data-role="${cr}" data-rowrole="${rr}" data-ri="${ri}" data-ci="${ci}">${_h(cell || '')}</td>`;
+            }).join('')}
+          </tr>`;
+        }).join('');
+
+        // 차트 SVG 복제
+        const origChart = wrapper.querySelector('.chart-slide');
+        const chartCloneHTML = origChart ? origChart.innerHTML : '';
+
+        modal.innerHTML = `
+          <div class="dm-backdrop"></div>
+          <div class="dm-split-panel">
+            <div class="dm-header">
+              <span>📋 데이터 매핑 (${fullData.length}행 × ${allColCount}열)</span>
+              <div class="dm-header-actions">
+                <div class="dm-callout-inline">
+                  <span><span class="ie-callout-dot" style="background:#6C5CE7"></span>라벨</span>
+                  <span><span class="ie-callout-dot" style="background:#00B894"></span>값</span>
+                  <span><span class="ie-callout-dot" style="background:#FDCB6E"></span>시리즈</span>
+                  <span><span class="ie-callout-dot" style="background:#B2BEC3"></span>무시</span>
+                </div>
+                <button class="dm-close">✕</button>
+              </div>
+            </div>
+            <div class="dm-split-body">
+              <div class="dm-chart-side">
+                <div class="dm-chart-preview">${chartCloneHTML}</div>
+                <div class="dm-chart-hint">셀을 클릭하면 차트에서 위치가 표시돼요</div>
+              </div>
+              <div class="dm-data-side">
+                <div class="dm-scroll">
+                  <table class="ie-preview-table dm-table">
+                    <thead>
+                      <tr class="ie-preview-role-row"><th class="ie-row-role-corner"></th>${colRoleRow}</tr>
+                      <tr><th class="ie-row-role-corner ie-row-role-label">행</th>${headerRow}</tr>
+                    </thead>
+                    <tbody>${bodyRows}</tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="dm-footer">
+              <button class="dm-done">완료</button>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(modal);
+        requestAnimationFrame(() => modal.classList.add('open'));
+
+        // 모달 내 차트 프리뷰 참조 (하이라이트용)
+        const dmChartPreview = modal.querySelector('.dm-chart-preview');
+
+        const closeModal = () => { modal.classList.remove('open'); setTimeout(() => modal.remove(), 250); liveUpdate(); };
+        modal.querySelector('.dm-backdrop').addEventListener('click', closeModal);
+        modal.querySelector('.dm-close').addEventListener('click', closeModal);
+        modal.querySelector('.dm-done').addEventListener('click', closeModal);
+
+        // 모달 내 차트 하이라이트 헬퍼
+        function highlightInModalChart(ri, ci, sourceEl) {
+          // 이전 하이라이트 제거
+          dmChartPreview.querySelectorAll('.chart-hl-box').forEach(el => el.remove());
+          dmChartPreview.querySelectorAll('.chart-highlight-pulse').forEach(el => el.remove());
+          modal.querySelectorAll('.ie-cell-active').forEach(el => el.classList.remove('ie-cell-active'));
+          if (sourceEl) sourceEl.classList.add('ie-cell-active');
+
+          const svgEl = dmChartPreview.querySelector('svg');
+          if (!svgEl) return;
+
+          const cellValue = fullData[ri] ? String(fullData[ri][ci] || '').trim() : '';
+          const rowLabel = fullData[ri] ? String(fullData[ri][0] || '').trim() : '';
+          const colRole = slide.colRoles ? slide.colRoles[ci] : 'value';
+          if (!cellValue) return;
+
+          const svgRect = svgEl.getBoundingClientRect();
+          const parentRect = dmChartPreview.getBoundingClientRect();
+          const vb = svgEl.viewBox.baseVal;
+          const scaleX = svgRect.width / (vb.width || 1200);
+          const scaleY = svgRect.height / (vb.height || 750);
+          const offsetX = svgRect.left - parentRect.left;
+          const offsetY = svgRect.top - parentRect.top;
+
+          const numVal = Number(cellValue);
+          const matchTexts = [cellValue];
+          if (!isNaN(numVal)) {
+            matchTexts.push(T.fmt(numVal), T.fmtTick(numVal), numVal.toLocaleString(),
+              numVal.toFixed(1), String(Math.round(numVal)),
+              numVal.toFixed(1)+'%', Math.round(numVal)+'%');
+          }
+
+          let found = false;
+          dmChartPreview.style.position = 'relative';
+
+          svgEl.querySelectorAll('text').forEach(txt => {
+            const content = txt.textContent.trim();
+            const isMatch = matchTexts.some(m => m && content === m);
+            const isLabelMatch = colRole === 'label' && content === cellValue;
+            if (!isMatch && !isLabelMatch) return;
+            try {
+              const bbox = txt.getBBox();
+              const box = document.createElement('div');
+              box.className = 'chart-hl-box';
+              const pad = 4;
+              box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
+              box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
+              box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
+              box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
+              box.style.borderColor = roleColors[colRole] || '#6C5CE7';
+              dmChartPreview.appendChild(box);
+              found = true;
+            } catch(e) {}
+          });
+
+          if (!found && rowLabel) {
+            svgEl.querySelectorAll('text').forEach(txt => {
+              if (txt.textContent.trim() !== rowLabel) return;
+              try {
+                const bbox = txt.getBBox();
+                const box = document.createElement('div');
+                box.className = 'chart-hl-box';
+                const pad = 4;
+                box.style.left = (offsetX + bbox.x * scaleX - pad) + 'px';
+                box.style.top = (offsetY + bbox.y * scaleY - pad) + 'px';
+                box.style.width = (bbox.width * scaleX + pad * 2) + 'px';
+                box.style.height = (bbox.height * scaleY + pad * 2) + 'px';
+                box.style.borderColor = '#6C5CE7';
+                dmChartPreview.appendChild(box);
+                found = true;
+              } catch(e) {}
+            });
+          }
+
+          const roleName = colRole === 'label' ? '라벨' : colRole === 'value' ? '값' : colRole === 'series' ? '시리즈' : '무시';
+          const tooltip = document.createElement('div');
+          tooltip.className = 'chart-highlight-pulse';
+          tooltip.innerHTML = `<span class="hl-dot" style="background:${roleColors[colRole]}"></span>
+            <span class="hl-text">"${_h(cellValue)}" → ${roleName} · ${_h(rowLabel || '행 '+(ri+1))}</span>`;
+          dmChartPreview.appendChild(tooltip);
+
+          setTimeout(() => {
+            dmChartPreview.querySelectorAll('.chart-hl-box').forEach(el => el.remove());
+            tooltip.remove();
+            if (sourceEl) sourceEl.classList.remove('ie-cell-active');
+          }, 4000);
+        }
+
+        // 모달 내 열 역할 변경
+        modal.querySelectorAll('.dm-col-role').forEach(sel => {
+          sel.addEventListener('change', () => {
+            const ci = Number(sel.dataset.col);
+            const role = sel.value;
+            slide.colRoles[ci] = role;
+            sel.style.borderColor = roleColors[role];
+            sel.style.color = roleColors[role];
+            const th = modal.querySelector(`.ie-preview-th[data-ci="${ci}"]`);
+            if (th) th.dataset.role = role;
+            modal.querySelectorAll(`tbody tr`).forEach(tr => {
+              const tds = tr.querySelectorAll('.ie-preview-td');
+              if (tds[ci]) tds[ci].dataset.role = role;
+            });
+            const inlineSel = panel.querySelector(`.ie-col-role[data-col="${ci}"]`);
+            if (inlineSel) { inlineSel.value = role; inlineSel.style.borderColor = roleColors[role]; inlineSel.style.color = roleColors[role]; }
+            const inlineTh = panel.querySelector(`.ie-preview-th[data-ci="${ci}"]`);
+            if (inlineTh) inlineTh.dataset.role = role;
+          });
+        });
+
+        // 모달 내 행 역할 토글
+        modal.querySelectorAll('.dm-row-tag').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const ri = Number(btn.dataset.row);
+            const next = slide.rowRoles[ri] === 'data' ? 'ignore' : 'data';
+            slide.rowRoles[ri] = next;
+            btn.dataset.role = next;
+            btn.textContent = next === 'data' ? '✓' : '✕';
+            btn.style.background = next === 'data' ? roleColors.data : roleColors.ignore;
+            const tr = modal.querySelector(`tr[data-row="${ri}"]`);
+            if (tr) { tr.dataset.rowrole = next; tr.querySelectorAll('.ie-preview-td').forEach(td => td.dataset.rowrole = next); }
+            // 인라인 에디터 동기화
+            const inlineBtn = panel.querySelector(`.ie-row-tag[data-row="${ri}"]`);
+            if (inlineBtn) { inlineBtn.dataset.role = next; inlineBtn.textContent = next==='data'?'✓':'✕'; inlineBtn.style.background = next==='data'?roleColors.data:roleColors.ignore; }
+            const inlineTr = panel.querySelector(`tr[data-row="${ri}"]`);
+            if (inlineTr) { inlineTr.dataset.rowrole = next; inlineTr.querySelectorAll('.ie-preview-td').forEach(td => td.dataset.rowrole = next); }
+          });
+        });
+
+        // 모달 내 셀 클릭 → 모달 차트 프리뷰에 하이라이트
+        modal.querySelectorAll('.dm-cell').forEach(td => {
+          td.addEventListener('click', () => {
+            const ri = Number(td.dataset.ri);
+            const ci = Number(td.dataset.ci);
+            highlightInModalChart(ri, ci, td);
+          });
+        });
+      });
+    }
+  }
+
+  // ── 차트 빌드 (타입별 분기) ──
+  function buildChart(slide) {
+    const { chartKind, title, subtitle, source, colors, filterInfo } = slide;
+    const parsed = applyVisibleCols(slide);
+    const { type, headers, data, meta } = parsed;
+
+    // 전역 filterInfo 설정 (SVG _wrap에서 자동 사용)
+    SvgCharts._filterInfo = filterInfo || '';
+
+    switch (chartKind) {
+      case 'line': return buildLine(slide, parsed);
+      case 'verticalBar': return buildVerticalBar(slide, parsed);
+      case 'horizontalBar': return buildHorizontalBar(slide, parsed);
+      case 'donut': return buildDonut(slide, parsed);
+      case 'combo': return buildCombo(slide, parsed);
+      case 'scatter': return buildScatter(slide, parsed);
+      case 'bubble': return buildBubble(slide, parsed);
+      case 'stackedBar': return buildStackedBar(slide, parsed);
+      case 'splitBar': return buildSplitBar(slide, parsed);
+      case 'heatmap': return SvgCharts.heatmap(title, subtitle, source, headers, data);
+      case 'venn': return buildVenn(slide, parsed);
+      case 'flowCard': return buildFlowCard(slide, parsed);
+      case 'table':
+      default: return SvgCharts.table(title, subtitle, source, headers, data);
+    }
+  }
+
+  function applyVisibleCols(slide) {
+    let p = slide.parsed;
+
+    // 행/열 전치
+    if (slide.transposed && p.headers.length >= 2 && p.data.length >= 1) {
+      const origHeaders = p.headers;
+      const origData = p.data;
+      const newHeaders = [origHeaders[0], ...origData.map(r => r[0])];
+      const newData = origHeaders.slice(1).map((h, ci) => {
+        return [h, ...origData.map(r => r[ci + 1])];
+      });
+      p = { ...p, headers: newHeaders, data: newData };
+    }
+
+    // 행 역할 기반 필터링 (무시된 행 제거)
+    if (slide.rowRoles && slide.rowRoles.length > 0) {
+      const rangeStart = slide.rangeStart || 0;
+      const filteredData = p.data.filter((_, di) => {
+        const origIdx = rangeStart + di;
+        return slide.rowRoles[origIdx] !== 'ignore';
+      });
+      if (filteredData.length < p.data.length) {
+        p = { ...p, data: filteredData };
+      }
+    }
+
+    // 열 역할 기반 필터링 (colRoles가 있으면 우선)
+    if (slide.colRoles && slide.colRoles.length > 0) {
+      const labelIdx = slide.colRoles.indexOf('label');
+      const keepCols = [labelIdx >= 0 ? labelIdx : 0];
+      slide.colRoles.forEach((role, i) => {
+        if ((role === 'value' || role === 'series') && !keepCols.includes(i)) keepCols.push(i);
+      });
+      if (keepCols.length > 1 && keepCols.length < p.headers.length) {
+        return {
+          ...p,
+          headers: keepCols.map(i => p.headers[i]).filter(Boolean),
+          data: p.data.map(r => keepCols.map(i => r[i])),
+        };
+      }
+      return p;
+    }
+
+    if (!slide.visibleCols || slide.visibleCols.length === 0) return p;
+    if (slide.chartKind === 'scatter') return p;
+    const keep = [0, ...slide.visibleCols.filter(c => c > 0)];
+    return {
+      ...p,
+      headers: keep.map(i => p.headers[i]).filter(Boolean),
+      data: p.data.map(r => keep.map(i => r[i])),
+    };
+  }
+
+  function buildLine(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const labels = data.map(r => r[0]);
+    // 시계열: 첫 열이 라벨, 나머지가 시리즈
+    const numCols = [];
+    for (let i=1;i<headers.length;i++) {
+      if (data.some(r => !isNaN(Number(r[i])))) numCols.push(i);
+    }
+    const series = numCols.map(ci => ({
+      label: headers[ci],
+      data: data.map(r => Number(r[ci])||0)
+    }));
+    return SvgCharts.line(slide.title, slide.subtitle, slide.source, labels, series, slide.colors, slide.showValueLabels);
+  }
+
+  function buildVerticalBar(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const labels = data.map(r => r[0]);
+    const numCols = [];
+    for (let i=1;i<headers.length;i++) {
+      if (data.some(r => !isNaN(Number(r[i])))) numCols.push(i);
+    }
+    const series = numCols.map(ci => ({
+      label: headers[ci],
+      data: data.map(r => Number(r[ci])||0)
+    }));
+    return SvgCharts.verticalBar(slide.title, slide.subtitle, slide.source, labels, series, slide.colors, slide.showValueLabels);
+  }
+
+  function buildHorizontalBar(slide, parsed) {
+    const { headers, data, type } = parsed || slide.parsed;
+
+    // 랭킹 타입: 순위, 앱명, 패키지명, 퍼블리셔명, 값, 점유율...
+    if (type.startsWith('ranking_')) {
+      const nameIdx = headers.findIndex(h => h.includes('앱명'));
+      const ni = nameIdx >= 0 ? nameIdx : 1;
+      // 숫자 값 열 찾기 (점유율 제외)
+      const valIdx = headers.findIndex(h =>
+        (h.includes('사용자 수') || h.includes('사용시간') || h.includes('활성 기기') || h.includes('설치 건'))
+        && !h.includes('점유율')
+      );
+      const vi = valIdx >= 0 ? valIdx : 4;
+      const top = data.slice(0, 10);
+      const rows = top.map(r => ({ label: r[ni] || r[1] || r[0], value: Number(r[vi]) || 0 }));
+      return SvgCharts.horizontalBar(slide.title, slide.subtitle, slide.source, rows, slide.colors);
+    }
+
+    // 데모그래픽 비교: 성별/연령별 비율 → 수평 바
+    if (type.startsWith('demo_') || type.startsWith('industry_demo_')) {
+      const apps = headers.slice(3);
+      const genderRows = data.filter(r => r[2]==='남성' || r[2]==='여성');
+      const ageRows = data.filter(r => r[2]!=='남성' && r[2]!=='여성');
+      // 첫 번째 앱의 연령별 데이터를 수평 바로
+      const rows = ageRows.map(r => ({ label: r[2] || r[0], value: Number(r[3]) || 0 }));
+      return SvgCharts.horizontalBar(slide.title, slide.subtitle, slide.source, rows, slide.colors);
+    }
+
+    // 범용
+    const nameIdx = headers.findIndex(h => h.includes('앱') || h.includes('이름') || h.includes('분류'));
+    const ni = nameIdx >= 0 ? nameIdx : 0;
+    const numCols = headers.map((_,i)=>i).filter(i => i!==ni && data.some(r => !isNaN(Number(r[i]))));
+    const vi = numCols[0] || 1;
+    const top = data.slice(0, 15);
+    const rows = top.map(r => ({ label: r[ni] || r[0], value: Number(r[vi]) || 0 }));
+    return SvgCharts.horizontalBar(slide.title, slide.subtitle, slide.source, rows, slide.colors);
+  }
+
+  function buildDonut(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const segments = data.map(r => ({
+      label: r[0],
+      value: Number(r[1]) || 0
+    }));
+    return SvgCharts.donut(slide.title, slide.subtitle, slide.source, segments);
+  }
+
+  function buildCombo(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const labels = data.map(r => r[0]);
+    const barData = data.map(r => Number(r[1])||0);
+    const lineData = data.map(r => Number(r[2])||Number(r[1])||0);
+    return SvgCharts.combo(slide.title, slide.subtitle, slide.source, labels, barData, headers[1]||'', lineData, headers[2]||headers[1]||'');
+  }
+
+  function buildScatter(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const nameIdx = headers.findIndex(h => h.includes('앱') || h.includes('이름'));
+    const ni = nameIdx >= 0 ? nameIdx : 0;
+    const pkgIdx = headers.findIndex(h => h.includes('패키지') || h.includes('package'));
+    const timeIdx = headers.findIndex(h => h.includes('사용시간'));
+    const dayIdx = headers.findIndex(h => h.includes('사용일'));
+    const xi = timeIdx >= 0 ? timeIdx : headers.length - 1;
+    const yi = dayIdx >= 0 ? dayIdx : Math.max(0, headers.length - 2);
+    const xLabel = headers[xi] || 'X';
+    const yLabel = headers[yi] || 'Y';
+    const points = data.filter(r => r && r.length > Math.max(xi, yi)).map(r => ({
+      label: r[ni] || r[0] || '',
+      x: Number(r[xi]) || 0,
+      y: Number(r[yi]) || 0,
+      pkg: pkgIdx >= 0 ? (r[pkgIdx] || '') : '',
+      iconUrl: _safeUrl(slide.iconUrls[(r[ni] || r[0] || '')] || ''),
+    }));
+    if (points.length === 0) return SvgCharts.table(slide.title, slide.subtitle, slide.source, headers, data);
+    return SvgCharts.scatter(slide.title, slide.subtitle, slide.source, points, xLabel, yLabel, slide.colors);
+  }
+
+  function buildFlowCard(slide, parsed) {
+    const { headers, data, meta } = parsed || slide.parsed;
+    // 이 CSV는 두 블록: 요약(총 유입자, 경쟁앱에서 유입) + 상세(순위별)
+    // 요약 블록: "총 유입자" 행 찾기
+    const summaryRow = data.find(r => r[0] && r[0].includes('총'));
+    const totalValue = summaryRow ? Number(summaryRow[1]) || 0 : 0;
+    const totalLabel = summaryRow ? summaryRow[0] : '총 유입자';
+
+    // 상세 블록: 순위가 있는 행들
+    const rankRows = data.filter(r => !isNaN(Number(r[0])) && Number(r[0]) > 0);
+    const items = rankRows.map(r => ({
+      rank: r[0],
+      name: r[1] || '',
+      value: Number(r[2]) || 0,
+      pct: r[3] || '',
+    }));
+
+    // 내 앱 이름 (meta에서 추출)
+    const appName = meta.appName ? meta.appName.replace('내 앱:', '').trim() : meta.reportType.split('>')[0].trim();
+
+    // 내 앱 패키지명 찾기 (아이콘용) — 앱명으로 매핑
+    const appPkgMap = {
+      'Netflix(넷플릭스)': 'com.netflix.mediaclient',
+      'TVING': 'net.cj.cjhv.gs.tving',
+      'Wavve (웨이브)': 'kr.co.captv.pooqV2',
+      '쿠팡플레이': 'com.coupang.mobile.play',
+      'Disney+': 'com.disney.disneyplus',
+      '왓챠': 'com.frograms.wplay',
+    };
+    const appPkg = appPkgMap[appName] || '';
+
+    // 유입이면 왼쪽 랭킹→오른쪽 KPI, 이탈이면 왼쪽 KPI→오른쪽 랭킹
+    const direction = parsed.type === 'flow_out' ? 'out' : 'in';
+    const headerLabel = direction === 'out' ? '경쟁앱으로 이탈' : '경쟁앱에서 유입';
+    const noteText = direction === 'out' ? 'ⓘ 참고 : 경쟁앱 간 중복 이탈자가 발생할 수 있습니다.' : 'ⓘ 참고 : 경쟁앱 간 중복 유입자가 발생할 수 있습니다.';
+
+    const el = SvgCharts.flowCard(slide.title, slide.subtitle, slide.source, appName, totalValue, totalLabel, items, slide.colors, appPkg, direction, headerLabel, noteText);
+    return el;
+  }
+
+
+  function buildVenn(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    if (!data || data.length < 2) return SvgCharts.table(slide.title, slide.subtitle, slide.source, headers, data);
+    // 제목에서 "(단위: ...)" 부분 제거
+    slide.title = slide.title.replace(/\s*\(단위[^)]*\)/, '').trim();
+
+    // CSV 컬럼 인덱스
+    // [기준앱/대상앱, 패키지명, 전체 사용자 수, 중복 사용자 제외한 사용자 수,
+    //  1인당 평균 사용일 수, 1인당 평균 사용 시간, 교차 사용자 1인당 평균 사용일 수, 교차 사용자 1인당 평균 사용 시간]
+    const r0 = data[0], r1 = data[1];
+    const app1Total  = Number(r0[2]) || 0;
+    const app1Only   = Number(r0[3]) || 0;
+    const crossCount = app1Total - app1Only;
+
+    const app1 = {
+      name:      r0[0],
+      pkg:       r0[1],
+      onlyUsers: app1Only,
+      crossDays: Number(r0[6]) || 0,
+      crossTime: Number(r0[7]) || 0,
+    };
+    const app2 = {
+      name:      r1[0],
+      pkg:       r1[1],
+      onlyUsers: Number(r1[3]) || 0,
+      crossDays: Number(r1[6]) || 0,
+      crossTime: Number(r1[7]) || 0,
+    };
+
+    return SvgCharts.venn(slide.title, slide.subtitle, slide.source, app1, app2, crossCount);
+  }
+
+  function buildStackedBar(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const labels = data.map(r => r[0]);
+    const numCols = [];
+    for (let i = 1; i < headers.length; i++) {
+      if (data.some(r => !isNaN(Number(r[i])))) numCols.push(i);
+    }
+    const series = numCols.map(ci => ({
+      label: headers[ci],
+      data: data.map(r => Number(r[ci]) || 0)
+    }));
+    return SvgCharts.stackedBar(slide.title, slide.subtitle, slide.source, labels, series, slide.colors);
+  }
+
+  function buildSplitBar(slide, parsed) {
+    const { headers, data, type } = parsed || slide.parsed;
+
+    // 데모그래픽 데이터: "분류" 열이 있으면 특수 처리
+    const classIdx = headers.findIndex(h => h === '분류' || h === '구분');
+
+    if (classIdx >= 0) {
+      // 분류 열에서 연령대만 필터 (남성/여성 제외)
+      const ageRows = data.filter(r => r[classIdx] && !/남성|여성/.test(r[classIdx]));
+      const numCols = headers.map((_, i) => i).filter(i => i !== classIdx && !['시작','종료'].includes(headers[i]) && ageRows.some(r => !isNaN(Number(r[i]))));
+
+      // labels = 앱/업종 (열 헤더)
+      const labels = numCols.map(ci => headers[ci]);
+      // series = 연령대 (행)
+      const series = ageRows.map(r => ({
+        label: r[classIdx],
+        data: numCols.map(ci => Number(r[ci]) || 0)
+      }));
+      return SvgCharts.splitBar(slide.title, slide.subtitle, slide.source, labels, series, slide.colors);
+    }
+
+    // 일반: 행=라벨, 열=시리즈 → 전치해서 열이 바, 행이 세그먼트
+    const rowLabels = data.map(r => r[0]);
+    const numCols = [];
+    for (let i = 1; i < headers.length; i++) {
+      if (data.some(r => !isNaN(Number(r[i])))) numCols.push(i);
+    }
+    const labels = numCols.map(ci => headers[ci]);
+    const series = rowLabels.map((rl, ri) => ({
+      label: rl,
+      data: numCols.map(ci => Number(data[ri][ci]) || 0)
+    }));
+    return SvgCharts.splitBar(slide.title, slide.subtitle, slide.source, labels, series, slide.colors);
+  }
+
+  function buildBubble(slide, parsed) {
+    const { headers, data } = parsed || slide.parsed;
+    const nameIdx = headers.findIndex(h => h.includes('앱') || h.includes('이름') || h.includes('분류'));
+    const ni = nameIdx >= 0 ? nameIdx : 0;
+    const numCols = headers.map((_, i) => i).filter(i => i !== ni && data.some(r => !isNaN(Number(r[i]))));
+
+    if (numCols.length < 2) {
+      // 열 1개 → 행 기준 단일 그룹
+      const vi = numCols[0] || 1;
+      const items = data.map(r => ({ label: r[ni]||r[0]||'', value: Number(r[vi])||0, subLabel: T.fmt(Number(r[vi])||0) }));
+      return SvgCharts.bubble(slide.title, slide.subtitle, slide.source, [{ title: '', items }], slide.colors);
+    }
+
+    // 열 기준 + bubbleGroups로 멀티 기간 지원
+    const groups = [];
+    const bg = slide.bubbleGroups;
+
+    if (bg && bg.length > 0) {
+      // 에디터에서 선택한 기간들
+      bg.forEach(g => {
+        const row = data[g.rowIdx];
+        if (!row) return;
+        const items = numCols.map(ci => ({
+          label: headers[ci],
+          value: Number(row[ci]) || 0,
+          subLabel: T.fmt(Number(row[ci]) || 0),
+        }));
+        groups.push({ title: g.label || row[0] || '', items });
+      });
+    } else {
+      // 기본: 마지막 행 하나
+      const lastRow = data[data.length - 1] || data[0];
+      const items = numCols.map(ci => ({
+        label: headers[ci],
+        value: Number(lastRow[ci]) || 0,
+        subLabel: T.fmt(Number(lastRow[ci]) || 0),
+      }));
+      groups.push({ title: lastRow[0] || '', items });
+    }
+
+    return SvgCharts.bubble(slide.title, slide.subtitle, slide.source, groups, slide.colors);
+  }
+
+  // ── 에디터 모달 ──
+  function openEditor(slide) {
+    const old = document.getElementById('editorModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'editorModal';
+    modal.className = 'editor-modal';
+
+    const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
+    const recommended = T.RECOMMENDED[dataType] || [];
+    const kindOptions = buildKindOptionsHTML(slide.chartKind, recommended);
+
+    // 전체 열 목록 (열 선택용)
+    const allHeaders = slide.parsed.headers;
+    const fullData = slide.fullParsed ? slide.fullParsed.data : slide.parsed.data;
+    const colCheckboxes = allHeaders.length > 2 ? allHeaders.map((h, i) => {
+      if (i === 0) return '';
+      const checked = !slide.visibleCols || slide.visibleCols.includes(i);
+      return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0;${!checked?'opacity:0.4':''}">
+        <input type="checkbox" class="col-check" data-col="${i}" ${checked ? 'checked' : ''} style="accent-color:var(--accent);width:16px;height:16px">
+        <span>${h}</span>
+        <span style="font-size:11px;color:var(--text-muted)">${checked ? '표시 중' : '숨김'}</span>
+      </label>`;
+    }).join('') : '';
+
+    // 지표 라벨 자동 파악
+    const metricNames = allHeaders.slice(1).filter(h => fullData.some(r => !isNaN(Number(r[allHeaders.indexOf(h)]))));
+    let metricType = '지표';
+    if (metricNames.some(n => /사용자|유저|user/i.test(n))) metricType = '앱/서비스';
+    else if (metricNames.some(n => /사용시간|사용일/i.test(n))) metricType = '사용 지표';
+    else if (metricNames.some(n => /대분류|소분류/i.test(n))) metricType = '업종';
+    else if (metricNames.length > 0) metricType = '지표';
+
+    // 시리즈 이름 추출 (데이터 타입에 따라)
+    const seriesNames = [];
+    if (slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare') {
+      // 스캐터: 각 행이 시리즈 (앱 이름)
+      const ni = slide.parsed.headers.findIndex(h => h.includes('앱') || h.includes('이름'));
+      fullData.forEach(r => seriesNames.push(r[ni >= 0 ? ni : 0] || ''));
+    } else {
+      // 일반: 헤더가 시리즈
+      const { headers } = slide.parsed;
+      for (let i = 1; i < headers.length; i++) {
+        if (fullData.some(r => !isNaN(Number(r[i])))) seriesNames.push(headers[i]);
+      }
+    }
+
+    const colorPickers = slide.colors.slice(0, Math.max(8, seriesNames.length)).map((c, i) => {
+      const name = seriesNames[i];
+      if (!name) return ''; // 시리즈 이름 없으면 숨김
+      return `<div class="color-pick">
+        <input type="color" value="${c}" data-idx="${i}" class="color-input">
+        <span class="color-label">${name}</span>
+      </div>`;
+    }).join('');
+
+    // 데이터 범위 (원본 데이터 기준 — fullData 위에서 이미 선언)
+    const hasRange = fullData.length > 1;
+    const rangeOptions = fullData.map((r, i) =>
+      `<option value="${i}">${_h(r[0] || '행 ' + (i+1))}</option>`
+    ).join('');
+    const curStart = slide.rangeStart || 0;
+    const curEnd = slide.rangeEnd != null ? slide.rangeEnd : fullData.length - 1;
+
+    // 항목/지표 이름 자동 파악
+    const firstColName = allHeaders[0] || '항목';
+    // 첫 열 값으로 항목 유형 추측
+    const sampleVals = fullData.slice(0, 3).map(r => r[0] || '');
+    let itemType = '항목';
+    if (sampleVals.some(v => /\d{4}[-\/\.]/.test(v))) itemType = '기간';
+    else if (sampleVals.some(v => /앱|App/i.test(firstColName))) itemType = '앱';
+    else if (firstColName.includes('순위')) itemType = '순위';
+    else if (firstColName.includes('분류') || firstColName.includes('구분')) itemType = '분류';
+    else if (firstColName.includes('연령') || firstColName.includes('나이')) itemType = '연령';
+    else itemType = firstColName || '항목';
+
+    modal.innerHTML = `
+      <div class="editor-backdrop"></div>
+      <div class="editor-panel">
+        <div class="editor-header">
+          <span class="editor-title-label">장표 설정</span>
+          <button class="editor-close">✕</button>
+        </div>
+        <div class="editor-body">
+          <div class="editor-field">
+            <label>차트 유형</label>
+            <div class="kind-grid">${kindOptions}</div>
+          </div>
+          <div class="editor-field">
+            <label>타이틀</label>
+            <input type="text" id="edTitle" value="${_h(slide.title)}">
+          </div>
+          <div class="editor-field">
+            <label>부제목</label>
+            <input type="text" id="edSubtitle" value="${_h(slide.subtitle)}">
+          </div>
+          <div class="editor-field">
+            <label>출처</label>
+            <input type="text" id="edSource" value="${_h(slide.source||'')}" placeholder="선택">
+          </div>
+          <div class="editor-field">
+            <label>필터 정보 (하단 표시)</label>
+            <input type="text" id="edFilterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS, 기간, 성별 등">
+          </div>
+          ${(() => {
+            const vlKind = slide.chartKind;
+            const vlTypes = ['line','verticalBar','combo','stackedBar'];
+            if (!vlTypes.includes(vlKind)) return '';
+            const vlNames = [];
+            if (vlKind === 'line' || vlKind === 'verticalBar' || vlKind === 'stackedBar') {
+              for (let i = 1; i < allHeaders.length; i++) {
+                if (fullData.some(r => !isNaN(Number(r[i])))) vlNames.push({ idx: i - 1, name: allHeaders[i] });
+              }
+            } else if (vlKind === 'combo') {
+              vlNames.push({ idx: 0, name: allHeaders[1] || '막대' });
+              vlNames.push({ idx: 1, name: allHeaders[2] || '꺾은선' });
+            }
+            if (vlNames.length === 0) return '';
+            if (!slide.showValueLabels) slide.showValueLabels = vlNames.map(() => true);
+            while (slide.showValueLabels.length < vlNames.length) slide.showValueLabels.push(true);
+            const items = vlNames.map(v => {
+              const on = slide.showValueLabels[v.idx] !== false;
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:3px 0">
+                <input type="checkbox" class="ed-vl-check" data-si="${v.idx}" ${on ? 'checked' : ''} style="accent-color:var(--accent);width:16px;height:16px">
+                <span style="${on ? '' : 'opacity:0.4'}">${v.name}</span>
+              </label>`;
+            }).join('');
+            return `<div class="editor-field">
+              <label>값 라벨 표시</label>
+              <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
+            </div>`;
+          })()}
+          ${hasRange ? `
+          <div class="editor-field">
+            <button id="edTranspose" style="width:100%;padding:10px 0;border:1.5px solid var(--divider);border-radius:10px;background:${slide.transposed?'var(--accent)':'#FFF'};color:${slide.transposed?'#FFF':'var(--text-dark)'};font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s">🔄 행/열 바꾸기 ${slide.transposed?'(전환됨)':''}</button>
+          </div>
+          <div class="editor-field">
+            <label>표시할 ${itemType} (전체 ${fullData.length}개)</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="edRangeStart" style="flex:1;padding:8px 10px;border:1px solid var(--divider);border-radius:8px;font-size:13px;font-family:inherit">${rangeOptions}</select>
+              <span style="color:var(--text-muted)">~</span>
+              <select id="edRangeEnd" style="flex:1;padding:8px 10px;border:1px solid var(--divider);border-radius:8px;font-size:13px;font-family:inherit">${rangeOptions}</select>
+            </div>
+            <div id="edRangeCount" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+          </div>` : ''}
+          ${slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare' ? `
+          <div class="editor-field">
+            <label>앱 아이콘 URL</label>
+            <div style="display:flex;flex-direction:column;gap:6px" id="iconUrlList">
+              ${seriesNames.map((name, i) => `
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${slide.iconUrls[name] ? `<img src="${_safeUrl(slide.iconUrls[name])}" width="20" height="20" style="border-radius:4px">` : `<div style="width:20;height:20;border-radius:4px;background:#EEE;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">${_h(name.charAt(0))}</div>`}
+                  <input type="text" class="icon-url-input" data-name="${_h(name)}" value="${_h(slide.iconUrls[name]||'')}" placeholder="${_h(name)} 아이콘 URL" style="flex:1;padding:6px 8px;border:1px solid var(--divider);border-radius:6px;font-size:11px;font-family:inherit;outline:none">
+                </div>
+              `).join('')}
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">이미지 URL을 붙여넣으세요 (비워두면 자동 감지)</div>
+          </div>` : ''}
+          ${slide.chartKind === 'bubble' && fullData.length > 1 ? `
+          <div class="editor-field">
+            <label>버블 기간 그룹</label>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">기간을 선택하면 해당 시점의 앱별 버블이 나와요</div>
+            <div id="bubbleGroupList" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button id="addBubbleGroup" style="margin-top:8px;padding:8px 14px;border:1.5px dashed var(--divider);border-radius:10px;background:none;cursor:pointer;font-size:13px;color:var(--accent);font-weight:600;font-family:inherit;width:100%">+ 기간 추가</button>
+          </div>` : ''}
+          ${colCheckboxes ? `
+          <div class="editor-field">
+            <label>비교할 ${metricType}</label>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">차트에 보여줄 항목을 선택하세요</div>
+            <div style="display:flex;flex-direction:column;gap:2px">${colCheckboxes}</div>
+          </div>` : ''}
+          <div class="editor-field">
+            <label>색상</label>
+            <div class="color-grid">${colorPickers}</div>
+          </div>
+        </div>
+        <div class="editor-footer">
+          <button class="editor-apply">적용</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('open'));
+
+    // 행/열 바꾸기 토글
+    const transposeBtn = modal.querySelector('#edTranspose');
+    if (transposeBtn) {
+      transposeBtn.addEventListener('click', () => {
+        slide.transposed = !slide.transposed;
+        // 버튼 스타일 업데이트
+        transposeBtn.style.background = slide.transposed ? 'var(--accent)' : '#FFF';
+        transposeBtn.style.color = slide.transposed ? '#FFF' : 'var(--text-dark)';
+        transposeBtn.textContent = '🔄 행/열 바꾸기 ' + (slide.transposed ? '(전환됨)' : '');
+      });
+    }
+
+    // 범위 초기값 + 카운트 업데이트
+    if (hasRange) {
+      const startSel = document.getElementById('edRangeStart');
+      const endSel = document.getElementById('edRangeEnd');
+      const countEl = document.getElementById('edRangeCount');
+      startSel.value = curStart;
+      endSel.value = curEnd;
+      const updateCount = () => {
+        const s = Number(startSel.value), e = Number(endSel.value);
+        const cnt = Math.abs(e - s) + 1;
+        const warn = cnt > MAX_ROWS ? ' ⚠️ 폰트가 작아질 수 있어요' : ' ✅';
+        countEl.innerHTML = `${cnt}개 선택${warn}`;
+      };
+      updateCount();
+      startSel.addEventListener('change', updateCount);
+      endSel.addEventListener('change', updateCount);
+    }
+
+    // 버블 그룹 관리
+    const bgList = modal.querySelector('#bubbleGroupList');
+    const bgAddBtn = modal.querySelector('#addBubbleGroup');
+    if (bgList && bgAddBtn) {
+      const rowOptions = fullData.map((r, i) => `<option value="${i}">${r[0] || '행 '+(i+1)}</option>`).join('');
+      const currentGroups = slide.bubbleGroups || [{ rowIdx: fullData.length - 1, label: fullData[fullData.length-1][0] || '' }];
+
+      function renderBgList() {
+        bgList.innerHTML = currentGroups.map((g, gi) => `
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:600;color:var(--text-dark);min-width:20px">${gi+1}</span>
+            <select class="bg-select" data-gi="${gi}" style="flex:1;padding:6px 8px;border:1px solid var(--divider);border-radius:8px;font-size:13px;font-family:inherit">${rowOptions}</select>
+            ${currentGroups.length > 1 ? `<button class="bg-remove" data-gi="${gi}" style="width:24px;height:24px;border-radius:50%;border:none;background:#F3F3F3;cursor:pointer;font-size:12px;color:#999">✕</button>` : ''}
+          </div>
+        `).join('');
+        bgList.querySelectorAll('.bg-select').forEach(sel => {
+          sel.value = currentGroups[Number(sel.dataset.gi)].rowIdx;
+          sel.addEventListener('change', () => {
+            const gi = Number(sel.dataset.gi);
+            currentGroups[gi].rowIdx = Number(sel.value);
+            currentGroups[gi].label = fullData[Number(sel.value)][0] || '';
+          });
+        });
+        bgList.querySelectorAll('.bg-remove').forEach(btn => {
+          btn.addEventListener('click', () => {
+            currentGroups.splice(Number(btn.dataset.gi), 1);
+            renderBgList();
+          });
+        });
+      }
+      renderBgList();
+      bgAddBtn.addEventListener('click', () => {
+        currentGroups.push({ rowIdx: 0, label: fullData[0][0] || '' });
+        renderBgList();
+      });
+      // 적용 시 저장할 수 있도록 modal에 참조 저장
+      modal._bubbleGroups = currentGroups;
+    }
+
+    // 차트 유형 선택
+    modal.querySelectorAll('.kind-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.kind-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // 닫기
+    const close = () => { modal.classList.remove('open'); setTimeout(()=>modal.remove(), 300); };
+    modal.querySelector('.editor-backdrop').addEventListener('click', close);
+    modal.querySelector('.editor-close').addEventListener('click', close);
+
+    // 적용
+    modal.querySelector('.editor-apply').addEventListener('click', () => {
+      slide.title = document.getElementById('edTitle').value;
+      slide.subtitle = document.getElementById('edSubtitle').value;
+      slide.source = document.getElementById('edSource').value;
+      slide.filterInfo = document.getElementById('edFilterInfo').value;
+      const activeKind = modal.querySelector('.kind-btn.active');
+      if (activeKind) slide.chartKind = activeKind.dataset.kind;
+      modal.querySelectorAll('.color-input').forEach(inp => {
+        slide.colors[Number(inp.dataset.idx)] = inp.value;
+      });
+
+      // 아이콘 URL 업데이트
+      modal.querySelectorAll('.icon-url-input').forEach(inp => {
+        const name = inp.dataset.name;
+        const url = _safeUrl(inp.value);
+        if (url) slide.iconUrls[name] = url;
+        else delete slide.iconUrls[name];
+      });
+
+      // 값 라벨 표시 업데이트
+      const vlChecks = modal.querySelectorAll('.ed-vl-check');
+      if (vlChecks.length > 0) {
+        if (!slide.showValueLabels) slide.showValueLabels = [];
+        vlChecks.forEach(cb => {
+          slide.showValueLabels[Number(cb.dataset.si)] = cb.checked;
+        });
+      }
+
+      // 버블 그룹 업데이트
+      if (modal._bubbleGroups) {
+        slide.bubbleGroups = modal._bubbleGroups.length > 0 ? [...modal._bubbleGroups] : null;
+      }
+
+      // 열 선택 업데이트
+      const colChecks = modal.querySelectorAll('.col-check');
+      if (colChecks.length > 0) {
+        const selected = [];
+        colChecks.forEach(cb => { if (cb.checked) selected.push(Number(cb.dataset.col)); });
+        slide.visibleCols = selected.length === colChecks.length ? null : selected;
+      }
+
+      // 범위 업데이트
+      if (hasRange) {
+        const s = Number(document.getElementById('edRangeStart').value);
+        const e = Number(document.getElementById('edRangeEnd').value);
+        const newStart = Math.min(s, e), newEnd = Math.max(s, e);
+        slide.rangeStart = newStart;
+        slide.rangeEnd = newEnd;
+        const baseParsed = slide.fullParsed || slide.parsed;
+        slide.parsed = { ...baseParsed, data: baseParsed.data.slice(newStart, newEnd + 1) };
+      }
+
+      // 리렌더
+      const oldEl = container.querySelector(`[data-slide-id="${slide.id}"]`);
+      if (oldEl) oldEl.remove();
+      renderSlide(slide);
+      close();
+    });
+  }
+  // ── 가이드 팝업 ──
+  function openGuideModal() {
+    const old = document.querySelector('.guide-modal');
+    if (old) { old.remove(); return; }
+    const modal = document.createElement('div');
+    modal.className = 'guide-modal';
+    modal.innerHTML = `
+      <div class="guide-modal-panel">
+        <div class="guide-modal-header">
+          <span class="guide-modal-title">📖 이렇게 사용하세요</span>
+          <button class="guide-modal-close">✕</button>
+        </div>
+        <div class="guide-modal-steps">
+          <div class="guide-modal-step">
+            <div class="guide-modal-num">1</div>
+            <div>
+              <div class="guide-modal-heading">CSV 파일 업로드</div>
+              <div class="guide-modal-desc">MI-INSIGHT에서 다운받은 CSV 또는 엑셀 파일을 드래그하거나 클릭해서 올려주세요. 여러 파일을 한번에 올릴 수 있어요.<br><span style="color:#E55;font-weight:600">⚠️ 주의: 한 파일에 여러 가지 데이터가 섞여있으면 인식하기 어려워요.</span></div>
+            </div>
+          </div>
+          <div class="guide-modal-step">
+            <div class="guide-modal-num">2</div>
+            <div>
+              <div class="guide-modal-heading">자동 차트 생성</div>
+              <div class="guide-modal-desc">데이터 유형을 자동으로 감지해서 가장 적합한 차트를 추천해드려요. 라인, 바, 도넛, 히트맵 등 13가지 차트를 지원합니다.</div>
+            </div>
+          </div>
+          <div class="guide-modal-step">
+            <div class="guide-modal-num">3</div>
+            <div>
+              <div class="guide-modal-heading">장표 설정</div>
+              <div class="guide-modal-desc">장표에 마우스를 올리면 ⚙️ 설정 버튼이 나타나요. 차트 유형 변경, 타이틀 수정, 데이터 범위 조절, 색상 변경이 가능합니다.</div>
+            </div>
+          </div>
+          <div class="guide-modal-step">
+            <div class="guide-modal-num">4</div>
+            <div>
+              <div class="guide-modal-heading">텍스트 수정</div>
+              <div class="guide-modal-desc">Aa 텍스트 수정 버튼을 누르면 차트 안의 글자를 직접 클릭해서 수정할 수 있어요.</div>
+            </div>
+          </div>
+          <div class="guide-modal-step">
+            <div class="guide-modal-num">5</div>
+            <div>
+              <div class="guide-modal-heading">다운로드 & 저장</div>
+              <div class="guide-modal-desc">개별 PNG/SVG 다운로드, 일괄 다운로드, 프로젝트 저장/불러오기를 지원합니다. 앱 아이콘도 포함돼요.</div>
+            </div>
+          </div>
+        </div>
+        <div class="guide-modal-tip">
+          💡 차트 유형 선택 시 <span class="guide-modal-rec">추천</span> 뱃지가 붙은 차트가 해당 데이터에 가장 잘 어울리는 유형이에요.
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelector('.guide-modal-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
+  // 온보딩 콜아웃
+  document.getElementById('guideCallout').addEventListener('click', openGuideModal);
+  // 결과 화면 헤더 버튼
+  document.getElementById('guideBtn').addEventListener('click', openGuideModal);
+
+  // ── 일괄 다운로드 (모달) ──
+  const batchDlBtn = document.getElementById('batchDlBtn');
+
+  batchDlBtn.addEventListener('click', () => {
+    if (slides.length === 0) { alert('다운로드할 장표가 없어요.'); return; }
+
+    const old = document.getElementById('batchModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'batchModal';
+    modal.className = 'batch-modal';
+
+    const listHTML = slides.map((s, i) => `
+      <label class="bm-item" data-idx="${i}">
+        <input type="checkbox" class="bm-check" data-idx="${i}" checked>
+        <span class="bm-check-custom"></span>
+        <span class="bm-num">${i + 1}</span>
+        <span class="bm-title">${_h(s.title || '장표 ' + (i+1))}</span>
+      </label>
+    `).join('');
+
+    modal.innerHTML = `
+      <div class="bm-backdrop"></div>
+      <div class="bm-panel">
+        <div class="bm-header">
+          <span>📥 일괄 다운로드</span>
+          <button class="bm-close">✕</button>
+        </div>
+        <div class="bm-body">
+          <div class="bm-select-bar">
+            <button class="bm-select-all">전체 선택</button>
+            <button class="bm-select-none">전체 해제</button>
+            <span class="bm-count-label"><span class="bm-count">${slides.length}</span>개 선택</span>
+          </div>
+          <div class="bm-list">${listHTML}</div>
+          <div class="bm-format">
+            <label>포맷</label>
+            <div class="bm-format-btns">
+              <button class="bm-fmt-btn active" data-fmt="png">PNG</button>
+              <button class="bm-fmt-btn" data-fmt="svg">SVG</button>
+            </div>
+          </div>
+        </div>
+        <div class="bm-footer">
+          <button class="bm-cancel">취소</button>
+          <button class="bm-download">📥 다운로드</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('open'));
+
+    let selectedFormat = 'png';
+
+    const closeModal = () => { modal.classList.remove('open'); setTimeout(() => modal.remove(), 250); };
+    modal.querySelector('.bm-backdrop').addEventListener('click', closeModal);
+    modal.querySelector('.bm-close').addEventListener('click', closeModal);
+    modal.querySelector('.bm-cancel').addEventListener('click', closeModal);
+
+    // 카운트 업데이트
+    const updateCount = () => {
+      const cnt = modal.querySelectorAll('.bm-check:checked').length;
+      modal.querySelector('.bm-count').textContent = cnt;
+    };
+    modal.querySelectorAll('.bm-check').forEach(cb => cb.addEventListener('change', updateCount));
+
+    // 전체 선택/해제
+    modal.querySelector('.bm-select-all').addEventListener('click', () => {
+      modal.querySelectorAll('.bm-check').forEach(cb => { cb.checked = true; });
+      updateCount();
+    });
+    modal.querySelector('.bm-select-none').addEventListener('click', () => {
+      modal.querySelectorAll('.bm-check').forEach(cb => { cb.checked = false; });
+      updateCount();
+    });
+
+    // 포맷 선택
+    modal.querySelectorAll('.bm-fmt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.bm-fmt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedFormat = btn.dataset.fmt;
+      });
+    });
+
+    // 다운로드 실행
+    modal.querySelector('.bm-download').addEventListener('click', async () => {
+      const dlBtn = modal.querySelector('.bm-download');
+      dlBtn.textContent = '⏳ 다운로드 중…';
+      dlBtn.disabled = true;
+
+      const wrappers = container.querySelectorAll('.slide-wrapper');
+      const checked = Array.from(modal.querySelectorAll('.bm-check:checked')).map(cb => Number(cb.dataset.idx));
+
+      for (const idx of checked) {
+        const slide = slides[idx];
+        if (!slide) continue;
+        const w = wrappers[idx];
+        if (!w) continue;
+        const chartEl = w.querySelector('.chart-slide');
+        if (!chartEl) continue;
+
+        try {
+          if (selectedFormat === 'svg') {
+            const svgEl = chartEl.querySelector('svg');
+            if (!svgEl) continue;
+            const str = new XMLSerializer().serializeToString(svgEl);
+            const blob = new Blob([str], { type: 'image/svg+xml' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${slide.title || '장표' + (idx+1)}.svg`;
+            a.click();
+          } else {
+            const svgInChart = chartEl.querySelector('svg');
+            if (svgInChart && typeof inlineSvgImages === 'function') await inlineSvgImages(svgInChart);
+            const canvas = await html2canvas(chartEl, { scale: 3, backgroundColor: '#F8F8F8', useCORS: true });
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            if (blob) {
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `${slide.title || '장표' + (idx+1)}.png`;
+              a.click();
+            }
+          }
+        } catch(e) { console.warn('다운로드 실패:', e); }
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      closeModal();
+    });
+  });
+
+  // ── 프로젝트 저장 (사이트 내 localStorage) ──
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    saveProject();
+    const isFirst = !localStorage.getItem('cs-save-noticed');
+    const toast = document.createElement('div');
+    toast.className = 'save-toast';
+    toast.innerHTML = isFirst
+      ? '✅ 저장 완료!<br><span style="font-size:12px;opacity:0.8">이 브라우저에 저장돼요. 캐시 삭제 시 사라질 수 있어요.</span>'
+      : '✅ 프로젝트가 저장되었어요!';
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, isFirst ? 4000 : 2000);
+    if (isFirst) localStorage.setItem('cs-save-noticed', '1');
+  });
+
+  // ── 프로젝트 불러오기 (사이트 내 localStorage 모달) ──
+  document.getElementById('loadBtn').addEventListener('click', () => {
+    const projects = JSON.parse(localStorage.getItem('cs-projects') || '{}');
+    const entries = Object.entries(projects).sort((a,b) => (b[1].updatedAt||'').localeCompare(a[1].updatedAt||''));
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay open';
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:480px">
+        <h3 style="margin:0 0 16px">📂 저장된 프로젝트</h3>
+        ${entries.length === 0
+          ? '<p style="color:#888;text-align:center;padding:24px 0">저장된 프로젝트가 없어요.</p>'
+          : `<div class="load-project-list">${entries.map(([id, p]) => {
+              const date = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('ko') : '';
+              return `<div class="load-project-item" data-id="${_h(id)}">
+                <div class="lp-info">
+                  <div class="lp-name">${_h(p.name || '이름 없음')}</div>
+                  <div class="lp-meta">${_h(p.slideCount || 0)}개 장표 · ${_h(date)}</div>
+                </div>
+                <button class="lp-delete" data-id="${_h(id)}" title="삭제">🗑</button>
+              </div>`;
+            }).join('')}</div>`
+        }
+        <div style="text-align:right;margin-top:16px">
+          <p class="lp-notice">💡 이 브라우저에 저장된 데이터예요. 다른 기기나 브라우저에서는 보이지 않아요.</p>
+          <button class="lp-close" style="padding:8px 20px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer">닫기</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.lp-close').addEventListener('click', () => {
+      modal.classList.remove('open');
+      setTimeout(() => modal.remove(), 250);
+    });
+    modal.addEventListener('click', e => {
+      if (e.target === modal) { modal.classList.remove('open'); setTimeout(() => modal.remove(), 250); }
+    });
+
+    modal.querySelectorAll('.load-project-item').forEach(item => {
+      item.addEventListener('click', e => {
+        if (e.target.closest('.lp-delete')) return;
+        loadProject(item.dataset.id);
+        modal.classList.remove('open');
+        setTimeout(() => modal.remove(), 250);
+      });
+    });
+    modal.querySelectorAll('.lp-delete').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (!confirm('이 프로젝트를 삭제하시겠어요?')) return;
+        const pjs = JSON.parse(localStorage.getItem('cs-projects') || '{}');
+        delete pjs[btn.dataset.id];
+        localStorage.setItem('cs-projects', JSON.stringify(pjs));
+        btn.closest('.load-project-item').remove();
+        if (!modal.querySelector('.load-project-item')) {
+          modal.querySelector('.load-project-list').innerHTML = '<p style="color:#888;text-align:center;padding:24px 0">저장된 프로젝트가 없어요.</p>';
+        }
+        showSavedProjects();
+      });
+    });
+  });
+
+  // 프로젝트 이름 변경
+  document.getElementById('projectName').addEventListener('blur', e => {
+    projectName = e.target.textContent.trim() || '새 프로젝트';
+    saveProject();
+  });
+  document.getElementById('projectName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+  });
+
+  // 페이지 로드 시 저장된 프로젝트 목록 표시
+  showSavedProjects();
+
+})();

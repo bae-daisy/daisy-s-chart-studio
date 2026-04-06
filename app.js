@@ -361,18 +361,28 @@
     showSavedProjects();
   });
 
+  // ── 토스트 알림 ──
+  function showToast(msg, isError) {
+    const toast = document.createElement('div');
+    toast.className = 'save-toast' + (isError ? ' error-toast' : '');
+    toast.innerHTML = msg;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 4000);
+  }
+
   function handleFiles(files) {
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     Array.from(files).forEach(file => {
       const ext = file.name.split('.').pop().toLowerCase();
-      if (!['csv', 'xlsx', 'xls'].includes(ext)) { alert('지원하지 않는 파일 형식이에요: ' + file.name + '\n\nCSV, XLSX, XLS 파일만 올릴 수 있어요.'); return; }
-      if (file.size > MAX_FILE_SIZE) { alert('파일이 너무 커요 (최대 10MB): ' + file.name); return; }
+      if (!['csv', 'xlsx', 'xls'].includes(ext)) { showToast('⚠️ 지원하지 않는 파일 형식이에요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">CSV, XLSX, XLS 파일만 올릴 수 있어요.</span>', true); return; }
+      if (file.size > MAX_FILE_SIZE) { showToast('⚠️ 파일이 너무 커요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">최대 10MB까지 올릴 수 있어요.</span>', true); return; }
 
       if (ext === 'csv') {
         const reader = new FileReader();
         reader.onload = e => {
           const parsed = Parser.parseFile(e.target.result);
-          if (!parsed) { alert('파일을 읽을 수 없어요: ' + file.name + '\n\n데이터가 너무 적거나 형식이 맞지 않아요.'); return; }
+          if (!parsed) { showToast('⚠️ 파일을 읽을 수 없어요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">데이터가 너무 적거나 형식이 맞지 않아요.</span>', true); return; }
           if (parsed.needsHeaderSelect) { openHeaderSelectModal(parsed.rawRows, parsed.rawText); return; }
           addSlide(parsed);
         };
@@ -391,8 +401,8 @@
               if (parsed && parsed.needsHeaderSelect) { openHeaderSelectModal(parsed.rawRows, parsed.rawText); anyParsed = true; return; }
               if (parsed) { addSlide(parsed); anyParsed = true; }
             });
-            if (!anyParsed) { alert('엑셀 파일에서 데이터를 찾을 수 없어요: ' + file.name + '\n\n시트에 데이터가 충분하지 않거나 형식이 맞지 않아요.'); }
-          } catch(err) { console.warn('엑셀 파싱 실패:', file.name, err); alert('엑셀 파일을 읽을 수 없어요: ' + file.name + '\n\n파일이 손상되었거나 지원하지 않는 형식이에요.'); }
+            if (!anyParsed) { showToast('⚠️ 데이터를 찾을 수 없어요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">시트에 데이터가 충분하지 않거나 형식이 맞지 않아요.</span>', true); }
+          } catch(err) { console.warn('엑셀 파싱 실패:', file.name, err); showToast('⚠️ 엑셀 파일을 읽을 수 없어요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">파일이 손상되었거나 지원하지 않는 형식이에요.</span>', true); }
         };
         reader.readAsArrayBuffer(file);
       }
@@ -498,7 +508,7 @@
         const idx = Number(tr.dataset.idx);
         const parsed = Parser.parseFile(rawText, idx);
         if (!parsed || parsed.needsHeaderSelect) {
-          alert('선택한 행으로 데이터를 읽을 수 없어요. 다른 행을 선택해주세요.');
+          showToast('⚠️ 선택한 행으로 데이터를 읽을 수 없어요.<br><span style="font-size:12px;opacity:0.85">다른 행을 선택해주세요.</span>', true);
           return;
         }
         modal.remove();

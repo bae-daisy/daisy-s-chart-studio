@@ -1604,3 +1604,11 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   text-overflow: ellipsis;
   max-width: 140px;
 }
+
+/* ── 에러 토스트 ── */
+.error-toast {
+  background: #E55 !important;
+  color: #fff !important;
+  text-align: center;
+  line-height: 1.5;
+}

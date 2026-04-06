@@ -31,9 +31,23 @@ const Parser = {
       return this._buildResult(rows, forceHeaderIdx);
     }
 
-    // 행이 7개 미만이면 MI형식이 아닐 수 있으므로 첫 행을 헤더로 시도
+    // 행이 7개 미만이면 짧은 데이터 → 헤더를 스마트하게 찾기
     if (rows.length < 7) {
-      return this._buildResult(rows, 0);
+      const _isNum = (c) => { if (c === '') return true; return !isNaN(Number(c.replace(/,/g, '').replace(/%$/, ''))); };
+      for (let i = 0; i < rows.length - 1; i++) {
+        const row = rows[i];
+        if (!row || row.length < 2) continue;
+        const nonEmpty = row.filter(c => c !== '');
+        const textCells = nonEmpty.filter(c => !_isNum(c)).length;
+        if (textCells >= Math.max(2, Math.ceil(nonEmpty.length * 0.5))) {
+          return this._buildResult(rows, i);
+        }
+      }
+      // 텍스트 헤더를 못 찾으면 첫 번째 다중열 행을 헤더로
+      for (let i = 0; i < rows.length - 1; i++) {
+        if (rows[i] && rows[i].length >= 2) return this._buildResult(rows, i);
+      }
+      return null;
     }
 
     const meta = this.extractMeta(rows);
@@ -71,7 +85,10 @@ const Parser = {
       }
     }
     if (headerIdx === -1) {
-      // 헤더를 자동으로 찾지 못함 → raw rows 반환하여 사용자에게 선택하게 함
+      // 헤더를 자동으로 찾지 못함
+      // 열이 2개 이상인 행이 있어야 의미 있는 데이터
+      const hasMultiCol = rows.some(r => r.length >= 2 && r.filter(c => c !== '').length >= 2);
+      if (!hasMultiCol) return null;
       return { needsHeaderSelect: true, rawRows: rows, rawText: text };
     }
 
@@ -170,8 +187,9 @@ const Parser = {
   // ── 사용자 지정 헤더로 결과 빌드 ──
   _buildResult(rows, headerIdx) {
     const headers = rows[headerIdx];
+    if (!headers || headers.length < 2) return null;
     const data = rows.slice(headerIdx + 1).filter(r => r.length >= headers.length - 1 && r.some(c => c !== ''));
-    if (headers.length === 0 || data.length === 0) return null;
+    if (data.length === 0) return null;
     const type = 'unknown';
     const chartKind = this.recommendChart(type, headers, data);
     this._convertPkgToAppName(headers, data);

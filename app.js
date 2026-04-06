@@ -365,7 +365,7 @@
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     Array.from(files).forEach(file => {
       const ext = file.name.split('.').pop().toLowerCase();
-      if (!['csv', 'xlsx', 'xls'].includes(ext)) return;
+      if (!['csv', 'xlsx', 'xls'].includes(ext)) { alert('지원하지 않는 파일 형식이에요: ' + file.name + '\n\nCSV, XLSX, XLS 파일만 올릴 수 있어요.'); return; }
       if (file.size > MAX_FILE_SIZE) { alert('파일이 너무 커요 (최대 10MB): ' + file.name); return; }
 
       if (ext === 'csv') {

@@ -14,6 +14,40 @@ const Parser = {
     });
   },
 
+  // ── 섹션 마커/제목 행 감지 (예: [MAU], MAU, "시트제목" 등) ──
+  _isSectionOrTitleRow(row) {
+    if (!row) return false;
+    const nonEmpty = row.filter(c => c !== '');
+    // 비어있는 행
+    if (nonEmpty.length === 0) return true;
+    // 셀 1개만 있고 대괄호 마커이거나 짧은 제목 (MI-INSIGHT 메타 행은 제외)
+    if (nonEmpty.length === 1) {
+      const v = nonEmpty[0].trim();
+      if (/^\[.+\]$/.test(v)) return true; // [MAU] 같은 섹션 마커
+      // MI-INSIGHT 메타 행은 건너뛰지 않음
+      if (/^(MI-INSIGHT|내 앱:|OS:|기간:)/i.test(v)) return false;
+      if (v.includes('>')) return false; // "사용량 순위>사용자 수 순위" 같은 경로
+      if (v.length <= 20 && !/\d{4}[.\-\/]/.test(v)) return true; // 짧은 제목 (날짜 아닌)
+    }
+    return false;
+  },
+
+  // ── 선행 빈 열 제거 (엑셀 들여쓰기 대응) ──
+  _trimLeadingEmptyCols(rows) {
+    if (rows.length === 0) return rows;
+    // 모든 행에서 첫 N열이 비어있으면 제거
+    let emptyPrefix = Infinity;
+    for (const row of rows) {
+      let cnt = 0;
+      while (cnt < row.length && row[cnt] === '') cnt++;
+      if (cnt < row.length) emptyPrefix = Math.min(emptyPrefix, cnt);
+    }
+    if (emptyPrefix > 0 && emptyPrefix < Infinity) {
+      return rows.map(r => r.slice(emptyPrefix));
+    }
+    return rows;
+  },
+
   extractMeta(rows) {
     let reportType='', filterInfo='', appName='';
     const r1 = (rows[1]&&rows[1][0])||'', r2 = (rows[2]&&rows[2][0])||'';
@@ -23,12 +57,37 @@ const Parser = {
   },
 
   parseFile(text, forceHeaderIdx) {
-    const rows = this.parseCSV(text);
+    let rows = this.parseCSV(text);
     if (rows.length < 2) return null;
+
+    // 선행 빈 열 제거 (엑셀 들여쓰기 대응)
+    rows = this._trimLeadingEmptyCols(rows);
 
     // 사용자가 헤더 행을 직접 지정한 경우
     if (forceHeaderIdx != null && forceHeaderIdx >= 0 && forceHeaderIdx < rows.length) {
-      return this._buildResult(rows, forceHeaderIdx);
+      return this._buildResult(rows, forceHeaderIdx, sectionTitle);
+    }
+
+    // 섹션 마커/제목 행 건너뛰기: 앞쪽의 [MAU], 빈 행, 짧은 제목 등 제거
+    let skipCount = 0;
+    let sectionTitle = ''; // 섹션 제목 보존
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      if (this._isSectionOrTitleRow(rows[i])) {
+        // 비어있지 않은 섹션 제목 저장
+        const nonEmpty = rows[i].filter(c => c !== '');
+        if (nonEmpty.length === 1) {
+          const v = nonEmpty[0].trim().replace(/^\[|\]$/g, '');
+          if (v) sectionTitle = v;
+        }
+        skipCount = i + 1;
+      }
+      else break;
+    }
+    if (skipCount > 0) {
+      rows = rows.slice(skipCount);
+      if (rows.length < 2) return null;
+      // 섹션 마커 제거 후 다시 빈 열 정리
+      rows = this._trimLeadingEmptyCols(rows);
     }
 
     // 행이 7개 미만이면 짧은 데이터 → 헤더를 스마트하게 찾기
@@ -40,12 +99,12 @@ const Parser = {
         const nonEmpty = row.filter(c => c !== '');
         const textCells = nonEmpty.filter(c => !_isNum(c)).length;
         if (textCells >= Math.max(2, Math.ceil(nonEmpty.length * 0.5))) {
-          return this._buildResult(rows, i);
+          return this._buildResult(rows, i, sectionTitle);
         }
       }
       // 텍스트 헤더를 못 찾으면 첫 번째 다중열 행을 헤더로
       for (let i = 0; i < rows.length - 1; i++) {
-        if (rows[i] && rows[i].length >= 2) return this._buildResult(rows, i);
+        if (rows[i] && rows[i].length >= 2) return this._buildResult(rows, i, sectionTitle);
       }
       return null;
     }
@@ -77,8 +136,9 @@ const Parser = {
     }
     // 2차: 0~2행에서 헤더 탐색 (외부 데이터)
     if (headerIdx === -1) {
-      for (let i = 0; i < Math.min(rows.length, 3); i++) {
+      for (let i = 0; i < Math.min(rows.length, 5); i++) {
         const row = rows[i];
+        if (this._isSectionOrTitleRow(row)) continue; // 섹션 마커 건너뛰기
         if (!_isHeaderLike(row)) continue;
         const next = rows[i+1];
         if (next && next.length > 1 && next.some(c => c !== '')) { headerIdx = i; break; }
@@ -131,8 +191,16 @@ const Parser = {
     // 자동 차트 추천
     const chartKind = this.recommendChart(type, headers, data);
 
+    // 숫자 열의 쉼표 제거
+    this._cleanNumericCommas(headers, data);
+
     // 패키지명 → 앱명 자동 변환
     this._convertPkgToAppName(headers, data);
+
+    // 섹션 제목이 있고 reportType이 비어있거나 날짜 같은 값이면 보정
+    if (sectionTitle && (!meta.reportType || /^\d{4}[.\-\/]/.test(meta.reportType))) {
+      meta.reportType = sectionTitle;
+    }
 
     return { type, chartKind, meta, headers, data };
   },
@@ -185,16 +253,47 @@ const Parser = {
   },
 
   // ── 사용자 지정 헤더로 결과 빌드 ──
-  _buildResult(rows, headerIdx) {
+  _buildResult(rows, headerIdx, sectionTitle) {
     const headers = rows[headerIdx];
     if (!headers || headers.length < 2) return null;
     const data = rows.slice(headerIdx + 1).filter(r => r.length >= headers.length - 1 && r.some(c => c !== ''));
     if (data.length === 0) return null;
+
+    // 숫자 열의 쉼표 제거 (예: "824,403" → "824403")
+    this._cleanNumericCommas(headers, data);
+
     const type = 'unknown';
     const chartKind = this.recommendChart(type, headers, data);
     this._convertPkgToAppName(headers, data);
-    const meta = { reportType: '', filterInfo: '', appName: '' };
+    // 헤더 위쪽에서 섹션 제목/시트명 추출 (reportType으로 활용)
+    let reportType = sectionTitle || '';
+    if (!reportType) {
+      for (let i = headerIdx - 1; i >= 0; i--) {
+        const row = rows[i];
+        if (!row) continue;
+        const nonEmpty = row.filter(c => c !== '');
+        if (nonEmpty.length === 1) {
+          const v = nonEmpty[0].trim().replace(/^\[|\]$/g, ''); // [MAU] → MAU
+          if (v) { reportType = v; break; }
+        }
+      }
+    }
+    const meta = { reportType, filterInfo: '', appName: '' };
     return { type, chartKind, meta, headers, data };
+  },
+
+  // ── 숫자 열의 쉼표 제거 ──
+  _cleanNumericCommas(headers, data) {
+    for (let ci = 1; ci < headers.length; ci++) {
+      // 해당 열의 비어있지 않은 값 중 쉼표 포함 숫자가 과반수면 정리
+      const nonEmpty = data.map(r => r[ci]).filter(c => c != null && c !== '');
+      const commaNumCount = nonEmpty.filter(c => /^-?[\d,]+\.?\d*%?$/.test(String(c).trim())).length;
+      if (commaNumCount >= nonEmpty.length * 0.5) {
+        data.forEach(r => {
+          if (r[ci] != null) r[ci] = String(r[ci]).replace(/,/g, '');
+        });
+      }
+    }
   },
 
   // ── 데이터 타입 → 최적 차트 자동 추천 ──
@@ -223,14 +322,15 @@ const Parser = {
     if (['churn_analysis','flow_churn','flow_retention','loyalty_compare','demographic_ranking'].includes(type)) return 'table';
 
     // unknown → 데이터 프로파일링
-    const numCols = headers.filter((_,i) => i>0 && data.some(r => !isNaN(Number(r[i])))).length;
-    const hasDate = data.some(r => /\d+\/\d+|\d{4}-\d{2}/.test(r[0]));
+    const _parseNum = (v) => { const s = String(v||'').replace(/,/g,'').replace(/%$/,''); return Number(s); };
+    const numCols = headers.filter((_,i) => i>0 && data.some(r => !isNaN(_parseNum(r[i])))).length;
+    const hasDate = data.some(r => /\d+\/\d+|\d{4}[-\.]\d{2}/.test(r[0]));
     const rowCount = data.length;
     if (hasDate && rowCount >= 5) return 'line';
     if (numCols >= 2 && rowCount >= 3) return 'verticalBar';
     if (numCols === 1 && rowCount <= 6) {
       // 합이 100% 근처면 도넛, 아니면 수평 바
-      const vals = data.map(r => Number(r[1]) || 0);
+      const vals = data.map(r => _parseNum(r[1]) || 0);
       const sum = vals.reduce((a,b) => a+b, 0);
       if (sum > 85 && sum < 115) return 'donut';
       return 'horizontalBar';

@@ -388,20 +388,12 @@
         };
         reader.readAsText(file, 'UTF-8');
       } else {
-        // xlsx/xls
+        // xlsx/xls → 스프레드시트 뷰어로 열기
         const reader = new FileReader();
         reader.onload = e => {
           try {
             const wb = XLSX.read(e.target.result, { type: 'array' });
-            let anyParsed = false;
-            wb.SheetNames.forEach(name => {
-              const sheet = wb.Sheets[name];
-              const csv = XLSX.utils.sheet_to_csv(sheet);
-              const parsed = Parser.parseFile(csv);
-              if (parsed && parsed.needsHeaderSelect) { openHeaderSelectModal(parsed.rawRows, parsed.rawText); anyParsed = true; return; }
-              if (parsed) { addSlide(parsed); anyParsed = true; }
-            });
-            if (!anyParsed) { showToast('⚠️ 데이터를 찾을 수 없어요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">시트에 데이터가 충분하지 않거나 형식이 맞지 않아요.</span>', true); }
+            openSpreadsheetViewer(wb, file.name);
           } catch(err) { console.warn('엑셀 파싱 실패:', file.name, err); showToast('⚠️ 엑셀 파일을 읽을 수 없어요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">파일이 손상되었거나 지원하지 않는 형식이에요.</span>', true); }
         };
         reader.readAsArrayBuffer(file);
@@ -411,6 +403,210 @@
 
   // ── 슬라이드 추가 (데이터 많으면 범위 선택) ──
   const MAX_ROWS = 15; // 1200×750에 깔끔하게 들어가는 최대 행 수
+
+  // ── 스프레드시트 뷰어 (엑셀 드래그 선택) ──
+  function openSpreadsheetViewer(wb, fileName) {
+    const old = document.getElementById('spreadsheetModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'spreadsheetModal';
+    modal.className = 'ss-modal';
+
+    // 시트 데이터 준비
+    const sheets = wb.SheetNames.map(name => {
+      const sheet = wb.Sheets[name];
+      const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      return { name, data: json };
+    });
+
+    let activeSheet = 0;
+    let sel = null; // { r1, c1, r2, c2 } 선택 영역
+    let dragging = false;
+    let dragStart = null; // { r, c }
+
+    function colLabel(c) {
+      let s = '';
+      while (c >= 0) { s = String.fromCharCode(65 + (c % 26)) + s; c = Math.floor(c / 26) - 1; }
+      return s;
+    }
+
+    function renderSheet() {
+      const sd = sheets[activeSheet];
+      const rows = sd.data;
+      if (!rows || rows.length === 0) return '<div class="ss-empty">빈 시트예요</div>';
+      const maxCols = Math.max(...rows.map(r => r.length), 0);
+      const maxR = Math.min(rows.length, 200);
+      const maxC = Math.min(maxCols, 50);
+
+      let html = '<table class="ss-table"><thead><tr><th class="ss-corner"></th>';
+      for (let c = 0; c < maxC; c++) html += `<th class="ss-col-hdr">${colLabel(c)}</th>`;
+      html += '</tr></thead><tbody>';
+      for (let r = 0; r < maxR; r++) {
+        html += `<tr><td class="ss-row-hdr">${r + 1}</td>`;
+        for (let c = 0; c < maxC; c++) {
+          const v = rows[r] && rows[r][c] != null ? rows[r][c] : '';
+          const display = String(v);
+          const truncated = display.length > 20 ? display.slice(0, 20) + '…' : display;
+          html += `<td class="ss-cell" data-r="${r}" data-c="${c}" title="${_h(display)}">${_h(truncated)}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      if (rows.length > maxR) html += `<div class="ss-truncated">… 외 ${rows.length - maxR}행 (최대 200행까지 표시)</div>`;
+      return html;
+    }
+
+    function renderTabs() {
+      return sheets.map((s, i) =>
+        `<button class="ss-tab${i === activeSheet ? ' active' : ''}" data-idx="${i}">${_h(s.name)}</button>`
+      ).join('');
+    }
+
+    function getSelectionInfo() {
+      if (!sel) return '';
+      const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
+      const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
+      const rows = r2 - r1 + 1, cols = c2 - c1 + 1;
+      return `${colLabel(c1)}${r1+1}:${colLabel(c2)}${r2+1} (${rows}행 × ${cols}열)`;
+    }
+
+    function updateSelection() {
+      const cells = modal.querySelectorAll('.ss-cell');
+      cells.forEach(td => td.classList.remove('ss-selected', 'ss-sel-top', 'ss-sel-bottom', 'ss-sel-left', 'ss-sel-right'));
+      if (!sel) { updateSelInfo(); return; }
+      const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
+      const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
+      cells.forEach(td => {
+        const r = Number(td.dataset.r), c = Number(td.dataset.c);
+        if (r >= r1 && r <= r2 && c >= c1 && c <= c2) {
+          td.classList.add('ss-selected');
+          if (r === r1) td.classList.add('ss-sel-top');
+          if (r === r2) td.classList.add('ss-sel-bottom');
+          if (c === c1) td.classList.add('ss-sel-left');
+          if (c === c2) td.classList.add('ss-sel-right');
+        }
+      });
+      updateSelInfo();
+    }
+
+    function updateSelInfo() {
+      const info = modal.querySelector('.ss-sel-info');
+      const btn = modal.querySelector('.ss-create-btn');
+      if (info) info.textContent = sel ? getSelectionInfo() : '영역을 드래그해서 선택하세요';
+      if (btn) btn.disabled = !sel;
+    }
+
+    function buildFromSelection() {
+      if (!sel) return;
+      const sd = sheets[activeSheet];
+      const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
+      const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
+      if (r2 - r1 < 1 || c2 - c1 < 0) { showToast('⚠️ 최소 2행 이상 선택해주세요', true); return; }
+
+      // 첫 행 = 헤더, 나머지 = 데이터
+      const headers = [];
+      for (let c = c1; c <= c2; c++) {
+        headers.push(String(sd.data[r1] && sd.data[r1][c] != null ? sd.data[r1][c] : colLabel(c)));
+      }
+      const data = [];
+      for (let r = r1 + 1; r <= r2; r++) {
+        const row = [];
+        for (let c = c1; c <= c2; c++) {
+          let v = sd.data[r] && sd.data[r][c] != null ? sd.data[r][c] : '';
+          // 숫자 쉼표 제거
+          if (typeof v === 'string') v = v.replace(/,/g, '');
+          row.push(String(v));
+        }
+        if (row.some(v => v !== '')) data.push(row);
+      }
+      if (data.length === 0) { showToast('⚠️ 선택 영역에 데이터가 없어요', true); return; }
+
+      const chartKind = Parser.recommendChart('unknown', headers, data);
+      const sheetName = sd.name && sd.name !== 'Sheet1' && sd.name !== 'Sheet 1' ? sd.name : '';
+      const parsed = {
+        type: 'unknown',
+        chartKind,
+        meta: { reportType: sheetName, filterInfo: '', appName: '' },
+        headers,
+        data
+      };
+      modal.remove();
+      addSlide(parsed);
+    }
+
+    // 모달 HTML
+    modal.innerHTML = `
+      <div class="ss-backdrop"></div>
+      <div class="ss-panel">
+        <div class="ss-header">
+          <div class="ss-header-left">
+            <span class="ss-title">📊 ${_h(fileName)}</span>
+            <span class="ss-sel-info">영역을 드래그해서 선택하세요</span>
+          </div>
+          <div class="ss-header-right">
+            <button class="ss-create-btn" disabled>차트 만들기 →</button>
+            <button class="ss-close">✕</button>
+          </div>
+        </div>
+        <div class="ss-tabs">${renderTabs()}</div>
+        <div class="ss-body">${renderSheet()}</div>
+        <div class="ss-footer">
+          <div class="ss-hint">💡 첫 행은 헤더(열 이름), 첫 열은 라벨(행 이름)로 사용돼요</div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('open'));
+
+    // 이벤트: 시트 탭 + 셀 드래그 (이벤트 위임)
+    function switchSheet(idx) {
+      activeSheet = idx;
+      sel = null;
+      modal.querySelector('.ss-tabs').innerHTML = renderTabs();
+      modal.querySelector('.ss-body').innerHTML = renderSheet();
+      updateSelection();
+    }
+
+    modal.querySelector('.ss-tabs').addEventListener('click', e => {
+      const tab = e.target.closest('.ss-tab');
+      if (tab) switchSheet(Number(tab.dataset.idx));
+    });
+
+    // 이벤트: 셀 드래그 선택
+    const ssBody = modal.querySelector('.ss-body');
+    ssBody.addEventListener('mousedown', e => {
+      const td = e.target.closest('.ss-cell');
+      if (!td) return;
+      e.preventDefault();
+      dragging = true;
+      const r = Number(td.dataset.r), c = Number(td.dataset.c);
+      dragStart = { r, c };
+      sel = { r1: r, c1: c, r2: r, c2: c };
+      updateSelection();
+    });
+    ssBody.addEventListener('mousemove', e => {
+      if (!dragging || !dragStart) return;
+      const td = e.target.closest('.ss-cell');
+      if (!td) return;
+      const r = Number(td.dataset.r), c = Number(td.dataset.c);
+      sel = { r1: dragStart.r, c1: dragStart.c, r2: r, c2: c };
+      updateSelection();
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+
+    // 이벤트: 차트 만들기
+    modal.querySelector('.ss-create-btn').addEventListener('click', buildFromSelection);
+
+    // 이벤트: 닫기
+    const closeModal = () => {
+      modal.classList.remove('open');
+      setTimeout(() => modal.remove(), 300);
+    };
+    modal.querySelector('.ss-close').addEventListener('click', closeModal);
+    modal.querySelector('.ss-backdrop').addEventListener('click', closeModal);
+  }
 
   function addSlide(parsed) {
     onboarding.style.display = 'none';

@@ -22,24 +22,58 @@ const Parser = {
     return { reportType, filterInfo, appName };
   },
 
-  parseFile(text) {
+  parseFile(text, forceHeaderIdx) {
     const rows = this.parseCSV(text);
-    if (rows.length < 7) return null;
+    if (rows.length < 2) return null;
+
+    // 사용자가 헤더 행을 직접 지정한 경우
+    if (forceHeaderIdx != null && forceHeaderIdx >= 0 && forceHeaderIdx < rows.length) {
+      return this._buildResult(rows, forceHeaderIdx);
+    }
+
+    // 행이 7개 미만이면 MI형식이 아닐 수 있으므로 첫 행을 헤더로 시도
+    if (rows.length < 7) {
+      return this._buildResult(rows, 0);
+    }
+
     const meta = this.extractMeta(rows);
     const rt = meta.reportType;
 
-    // 빈 행 건너뛰고 헤더 찾기 (보통 6행 근처)
+    // 빈 행 건너뛰고 헤더 찾기 (MI형식: 보통 4~8행, 외부 데이터: 0~3행)
     let headerIdx = -1;
-    for (let i = 4; i < Math.min(rows.length, 12); i++) {
+    // 헤더 후보 판별: 숫자/퍼센트가 아닌 텍스트 셀이 과반수인 행
+    const _isNumLike = (c) => {
+      if (c === '') return true;
+      const v = c.replace(/,/g, '').replace(/%$/, '');
+      return !isNaN(Number(v));
+    };
+    const _isHeaderLike = (row) => {
+      if (!row || row.length <= 1) return false;
+      if (row.every(c => c === '')) return false;
+      const nonEmpty = row.filter(c => c !== '');
+      const textCells = nonEmpty.filter(c => !_isNumLike(c)).length;
+      return textCells >= Math.max(2, Math.ceil(nonEmpty.length * 0.5));
+    };
+    // 1차: MI형식 (3행 이후)
+    for (let i = 3; i < Math.min(rows.length, 12); i++) {
       const row = rows[i];
-      if (!row || row.length <= 1) continue;
-      // 빈 행 건너뛰기
-      if (row.every(c => c === '')) continue;
-      // 다음 행에 데이터가 있는지 확인
+      if (!_isHeaderLike(row)) continue;
       const next = rows[i+1];
       if (next && next.length > 1 && next.some(c => c !== '')) { headerIdx = i; break; }
     }
-    if (headerIdx === -1) return null;
+    // 2차: 0~2행에서 헤더 탐색 (외부 데이터)
+    if (headerIdx === -1) {
+      for (let i = 0; i < Math.min(rows.length, 3); i++) {
+        const row = rows[i];
+        if (!_isHeaderLike(row)) continue;
+        const next = rows[i+1];
+        if (next && next.length > 1 && next.some(c => c !== '')) { headerIdx = i; break; }
+      }
+    }
+    if (headerIdx === -1) {
+      // 헤더를 자동으로 찾지 못함 → raw rows 반환하여 사용자에게 선택하게 함
+      return { needsHeaderSelect: true, rawRows: rows, rawText: text };
+    }
 
     const headers = rows[headerIdx];
     const data = rows.slice(headerIdx+1).filter(r => r.length >= headers.length-1 && r[0] !== '');
@@ -131,6 +165,18 @@ const Parser = {
         }
       });
     }
+  },
+
+  // ── 사용자 지정 헤더로 결과 빌드 ──
+  _buildResult(rows, headerIdx) {
+    const headers = rows[headerIdx];
+    const data = rows.slice(headerIdx + 1).filter(r => r.length >= headers.length - 1 && r.some(c => c !== ''));
+    if (headers.length === 0 || data.length === 0) return null;
+    const type = 'unknown';
+    const chartKind = this.recommendChart(type, headers, data);
+    this._convertPkgToAppName(headers, data);
+    const meta = { reportType: '', filterInfo: '', appName: '' };
+    return { type, chartKind, meta, headers, data };
   },
 
   // ── 데이터 타입 → 최적 차트 자동 추천 ──

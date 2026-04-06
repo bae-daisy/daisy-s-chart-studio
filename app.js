@@ -372,7 +372,8 @@
         const reader = new FileReader();
         reader.onload = e => {
           const parsed = Parser.parseFile(e.target.result);
-          if (!parsed) { console.warn('파싱 실패:', file.name); return; }
+          if (!parsed) { alert('파일을 읽을 수 없어요: ' + file.name + '\n\n데이터가 너무 적거나 형식이 맞지 않아요.'); return; }
+          if (parsed.needsHeaderSelect) { openHeaderSelectModal(parsed.rawRows, parsed.rawText); return; }
           addSlide(parsed);
         };
         reader.readAsText(file, 'UTF-8');
@@ -382,13 +383,16 @@
         reader.onload = e => {
           try {
             const wb = XLSX.read(e.target.result, { type: 'array' });
+            let anyParsed = false;
             wb.SheetNames.forEach(name => {
               const sheet = wb.Sheets[name];
               const csv = XLSX.utils.sheet_to_csv(sheet);
               const parsed = Parser.parseFile(csv);
-              if (parsed) addSlide(parsed);
+              if (parsed && parsed.needsHeaderSelect) { openHeaderSelectModal(parsed.rawRows, parsed.rawText); anyParsed = true; return; }
+              if (parsed) { addSlide(parsed); anyParsed = true; }
             });
-          } catch(err) { console.warn('엑셀 파싱 실패:', file.name, err); }
+            if (!anyParsed) { alert('엑셀 파일에서 데이터를 찾을 수 없어요: ' + file.name + '\n\n시트에 데이터가 충분하지 않거나 형식이 맞지 않아요.'); }
+          } catch(err) { console.warn('엑셀 파싱 실패:', file.name, err); alert('엑셀 파일을 읽을 수 없어요: ' + file.name + '\n\n파일이 손상되었거나 지원하지 않는 형식이에요.'); }
         };
         reader.readAsArrayBuffer(file);
       }
@@ -440,6 +444,79 @@
   }
 
   // ── 범위 선택 모달 ──
+  // ── 헤더 행 선택 모달 ──
+  function openHeaderSelectModal(rawRows, rawText) {
+    const old = document.getElementById('headerSelectModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'headerSelectModal';
+    modal.className = 'range-modal';
+
+    // 미리보기: 최대 15행, 5열까지 표시
+    const previewRows = rawRows.slice(0, Math.min(rawRows.length, 15));
+    const maxCols = Math.min(Math.max(...rawRows.map(r => r.length)), 6);
+
+    let tableHTML = '<table class="header-select-table"><tbody>';
+    previewRows.forEach((row, i) => {
+      const isAllEmpty = row.every(c => c === '');
+      tableHTML += `<tr class="header-select-row${isAllEmpty ? ' empty-row' : ''}" data-idx="${i}">`;
+      tableHTML += `<td class="header-select-idx">${i + 1}</td>`;
+      for (let c = 0; c < maxCols; c++) {
+        const val = row[c] || '';
+        const display = val.length > 20 ? val.slice(0, 20) + '…' : val;
+        tableHTML += `<td class="header-select-cell" title="${_h(val)}">${_h(display)}</td>`;
+      }
+      if (rawRows[0] && rawRows[0].length > maxCols) {
+        if (i === 0) tableHTML += `<td class="header-select-cell" style="color:var(--text-muted)">…외 ${rawRows[0].length - maxCols}열</td>`;
+        else tableHTML += `<td class="header-select-cell"></td>`;
+      }
+      tableHTML += '</tr>';
+    });
+    if (rawRows.length > 15) {
+      tableHTML += `<tr><td colspan="${maxCols + 2}" style="text-align:center;color:var(--text-muted);padding:8px">…외 ${rawRows.length - 15}행</td></tr>`;
+    }
+    tableHTML += '</tbody></table>';
+
+    modal.innerHTML = `
+      <div class="range-panel" style="max-width:700px">
+        <h3>📋 헤더 행 선택</h3>
+        <p>데이터에서 열 이름(헤더)이 있는 행을 클릭해주세요.<br>
+        <span style="color:var(--accent);font-weight:600">앱 이름, 날짜 등 컬럼명이 있는 행을 선택하세요.</span></p>
+        <div class="header-select-preview">${tableHTML}</div>
+        <div class="range-actions">
+          <button class="range-btn-secondary" id="headerSelectCancel">취소</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // 행 클릭 이벤트
+    modal.querySelectorAll('.header-select-row').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const idx = Number(tr.dataset.idx);
+        const parsed = Parser.parseFile(rawText, idx);
+        if (!parsed || parsed.needsHeaderSelect) {
+          alert('선택한 행으로 데이터를 읽을 수 없어요. 다른 행을 선택해주세요.');
+          return;
+        }
+        modal.remove();
+        addSlide(parsed);
+      });
+
+      // 호버 효과
+      tr.addEventListener('mouseenter', () => {
+        modal.querySelectorAll('.header-select-row').forEach(r => r.classList.remove('selected'));
+        tr.classList.add('selected');
+      });
+    });
+
+    document.getElementById('headerSelectCancel').addEventListener('click', () => {
+      modal.remove();
+    });
+  }
+
   function openRangeModal(parsed) {
     const old = document.getElementById('rangeModal');
     if (old) old.remove();
@@ -1050,52 +1127,64 @@
 
       // ── 1. SVG circle/rect 요소로 직접 위치 찾기 (가장 정확) ──
       if (colRole !== 'label' && dataRowIdx >= 0) {
-        // 라인 차트: circle 요소들 중 해당 데이터 포인트 찾기
-        const circles = Array.from(svgEl.querySelectorAll('circle:not([r="0"])'));
-        // 시리즈 인덱스 (필터링된 헤더 기준, 0번은 라벨이므로 -1)
+        const kind = slide.chartKind;
         const seriesIdx = fColIdx > 0 ? fColIdx - 1 : -1;
         const numLabels = fLabels.length;
 
-        if (seriesIdx >= 0 && numLabels > 0) {
-          // circle이 시리즈별로 순서대로 나열됨: series0[0..n-1], series1[0..n-1], ...
-          const targetCircleIdx = seriesIdx * numLabels + dataRowIdx;
-          // stroke 있는 데이터 포인트 circle만 필터 (그라디언트 등 제외)
-          const dataCircles = circles.filter(c => c.getAttribute('stroke') && c.getAttribute('stroke-width'));
-          if (dataCircles[targetCircleIdx]) {
+        if (kind === 'horizontalBar') {
+          // 수평 바: 행마다 track rect + fill rect 순서로 2개씩
+          // fill rect = track 바로 다음 rect (같은 y좌표, 색상이 다름)
+          const allRects = Array.from(svgEl.querySelectorAll('rect'));
+          // track + fill 쌍으로 묶기: track 색상(T.track)인 것 다음이 fill
+          const fillRects = allRects.filter(r => {
+            const fill = r.getAttribute('fill') || '';
+            return fill !== T.track && fill !== T.bg && fill !== '#F8F8F8' && fill !== '#FFFFFF'
+              && !fill.startsWith('url(') && parseFloat(r.getAttribute('height') || 0) > 0
+              && parseFloat(r.getAttribute('width') || 0) > 0
+              && r.getAttribute('rx'); // 바 rect는 rx가 있음
+          });
+          if (fillRects[dataRowIdx]) {
             try {
-              const bbox = dataCircles[targetCircleIdx].getBBox();
+              const bbox = fillRects[dataRowIdx].getBBox();
               const box = document.createElement('div');
               box.className = 'chart-hl-box';
-              const pad = 8;
-              box.style.left = (offsetX + (bbox.x - pad/2) * scaleX) + 'px';
-              box.style.top = (offsetY + (bbox.y - pad/2) * scaleY) + 'px';
-              box.style.width = ((bbox.width + pad) * scaleX) + 'px';
-              box.style.height = ((bbox.height + pad) * scaleY) + 'px';
+              const pad = 4;
+              box.style.left = (offsetX + (bbox.x - pad) * scaleX) + 'px';
+              box.style.top = (offsetY + (bbox.y - pad) * scaleY) + 'px';
+              box.style.width = ((bbox.width + pad*2) * scaleX) + 'px';
+              box.style.height = ((bbox.height + pad*2) * scaleY) + 'px';
               box.style.borderColor = roleColors[colRole] || '#00B894';
-              box.style.borderRadius = '50%';
               chartEl.appendChild(box);
               found = true;
             } catch(e) {}
           }
-        }
+        } else if (kind === 'splitBar') {
+          // 스플릿 바: 데이터가 전치됨
+          // 차트 labels = 열 헤더(앱명), 차트 series = 행(연령대 등)
+          // 테이블 ri(행) → 차트의 시리즈(세그먼트) 인덱스
+          // 테이블 ci(열) → 차트의 라벨(바) 인덱스
+          const segRects = Array.from(svgEl.querySelectorAll('rect[clip-path]'));
 
-        // 바 차트: rect 요소들 중 해당 막대 찾기
-        if (!found) {
-          const rects = Array.from(svgEl.querySelectorAll('rect')).filter(r => {
-            const fill = r.getAttribute('fill') || '';
-            // 배경, 트랙, 그라디언트 rect 제외
-            return fill !== T.bg && fill !== T.track && fill !== '#F8F8F8' && fill !== '#FFFFFF'
-              && !fill.startsWith('url(') && r.getAttribute('height') !== String(vb.height || 750)
-              && parseFloat(r.getAttribute('height') || 0) > 0;
-          });
-          // 시리즈 수와 라벨 수로 rect 인덱스 계산
-          const numSeries = filtered.headers.length - 1;
-          if (seriesIdx >= 0 && numLabels > 0 && rects.length >= numLabels) {
-            // 세로바: 그룹별로 시리즈 순서 → idx = dataRowIdx * numSeries + seriesIdx
-            const targetIdx = dataRowIdx * numSeries + seriesIdx;
-            if (rects[targetIdx]) {
+          // 필터링된 데이터에서 행/열 매핑
+          const fHeaders = filtered.headers; // [라벨열, 값열1, 값열2, ...]
+          const fData = filtered.data;
+
+          // 차트의 labels = 값 열 헤더들 (인덱스 1부터)
+          const chartLabels = fHeaders.slice(1);
+          // 차트의 series = 데이터 행들
+          const chartSeriesCount = fData.length;
+
+          // 클릭한 셀의 열 헤더가 차트 labels에서 몇 번째인지 (= 차트의 바 인덱스)
+          const barIdx = chartLabels.indexOf(origHeader);
+          // 클릭한 셀의 행이 필터링된 데이터에서 몇 번째인지 (= 차트의 세그먼트 인덱스)
+          const segIdx = dataRowIdx;
+
+          if (barIdx >= 0 && segIdx >= 0 && chartSeriesCount > 0) {
+            // 세그먼트 rect 순서: bar0[seg0,seg1,...], bar1[seg0,seg1,...], ...
+            const targetIdx = barIdx * chartSeriesCount + segIdx;
+            if (segRects[targetIdx]) {
               try {
-                const bbox = rects[targetIdx].getBBox();
+                const bbox = segRects[targetIdx].getBBox();
                 const box = document.createElement('div');
                 box.className = 'chart-hl-box';
                 const pad = 4;
@@ -1107,6 +1196,58 @@
                 chartEl.appendChild(box);
                 found = true;
               } catch(e) {}
+            }
+          }
+        } else {
+          // 라인 차트: circle 요소들
+          const circles = Array.from(svgEl.querySelectorAll('circle:not([r="0"])'));
+          if (seriesIdx >= 0 && numLabels > 0) {
+            const targetCircleIdx = seriesIdx * numLabels + dataRowIdx;
+            const dataCircles = circles.filter(c => c.getAttribute('stroke') && c.getAttribute('stroke-width'));
+            if (dataCircles[targetCircleIdx]) {
+              try {
+                const bbox = dataCircles[targetCircleIdx].getBBox();
+                const box = document.createElement('div');
+                box.className = 'chart-hl-box';
+                const pad = 8;
+                box.style.left = (offsetX + (bbox.x - pad/2) * scaleX) + 'px';
+                box.style.top = (offsetY + (bbox.y - pad/2) * scaleY) + 'px';
+                box.style.width = ((bbox.width + pad) * scaleX) + 'px';
+                box.style.height = ((bbox.height + pad) * scaleY) + 'px';
+                box.style.borderColor = roleColors[colRole] || '#00B894';
+                box.style.borderRadius = '50%';
+                chartEl.appendChild(box);
+                found = true;
+              } catch(e) {}
+            }
+          }
+
+          // 세로 바 차트: rect 요소들
+          if (!found) {
+            const rects = Array.from(svgEl.querySelectorAll('rect')).filter(r => {
+              const fill = r.getAttribute('fill') || '';
+              return fill !== T.bg && fill !== T.track && fill !== '#F8F8F8' && fill !== '#FFFFFF'
+                && !fill.startsWith('url(') && r.getAttribute('height') !== String(vb.height || 750)
+                && parseFloat(r.getAttribute('height') || 0) > 0;
+            });
+            const numSeries = filtered.headers.length - 1;
+            if (seriesIdx >= 0 && numLabels > 0 && rects.length >= numLabels) {
+              const targetIdx = dataRowIdx * numSeries + seriesIdx;
+              if (rects[targetIdx]) {
+                try {
+                  const bbox = rects[targetIdx].getBBox();
+                  const box = document.createElement('div');
+                  box.className = 'chart-hl-box';
+                  const pad = 4;
+                  box.style.left = (offsetX + (bbox.x - pad) * scaleX) + 'px';
+                  box.style.top = (offsetY + (bbox.y - pad) * scaleY) + 'px';
+                  box.style.width = ((bbox.width + pad*2) * scaleX) + 'px';
+                  box.style.height = ((bbox.height + pad*2) * scaleY) + 'px';
+                  box.style.borderColor = roleColors[colRole] || '#00B894';
+                  chartEl.appendChild(box);
+                  found = true;
+                } catch(e) {}
+              }
             }
           }
         }
@@ -1361,44 +1502,48 @@
 
           // SVG circle/rect로 직접 위치 찾기
           if (colRole !== 'label' && dataRowIdx >= 0) {
-            const circles = Array.from(svgEl.querySelectorAll('circle:not([r="0"])'));
+            const kind = slide.chartKind;
             const seriesIdx = fColIdx > 0 ? fColIdx - 1 : -1;
             const numLabels = fLabels.length;
 
-            if (seriesIdx >= 0 && numLabels > 0) {
-              const targetCircleIdx = seriesIdx * numLabels + dataRowIdx;
-              const dataCircles = circles.filter(c => c.getAttribute('stroke') && c.getAttribute('stroke-width'));
-              if (dataCircles[targetCircleIdx]) {
+            if (kind === 'horizontalBar') {
+              const allRects = Array.from(svgEl.querySelectorAll('rect'));
+              const fillRects = allRects.filter(r => {
+                const fill = r.getAttribute('fill') || '';
+                return fill !== T.track && fill !== T.bg && fill !== '#F8F8F8' && fill !== '#FFFFFF'
+                  && !fill.startsWith('url(') && parseFloat(r.getAttribute('height') || 0) > 0
+                  && parseFloat(r.getAttribute('width') || 0) > 0
+                  && r.getAttribute('rx');
+              });
+              if (fillRects[dataRowIdx]) {
                 try {
-                  const bbox = dataCircles[targetCircleIdx].getBBox();
+                  const bbox = fillRects[dataRowIdx].getBBox();
                   const box = document.createElement('div');
                   box.className = 'chart-hl-box';
-                  const pad = 8;
-                  box.style.left = (offsetX + (bbox.x - pad/2) * scaleX) + 'px';
-                  box.style.top = (offsetY + (bbox.y - pad/2) * scaleY) + 'px';
-                  box.style.width = ((bbox.width + pad) * scaleX) + 'px';
-                  box.style.height = ((bbox.height + pad) * scaleY) + 'px';
+                  const pad = 4;
+                  box.style.left = (offsetX + (bbox.x - pad) * scaleX) + 'px';
+                  box.style.top = (offsetY + (bbox.y - pad) * scaleY) + 'px';
+                  box.style.width = ((bbox.width + pad*2) * scaleX) + 'px';
+                  box.style.height = ((bbox.height + pad*2) * scaleY) + 'px';
                   box.style.borderColor = roleColors[colRole] || '#00B894';
-                  box.style.borderRadius = '50%';
                   dmChartPreview.appendChild(box);
                   found = true;
                 } catch(e) {}
               }
-            }
+            } else if (kind === 'splitBar') {
+              const segRects = Array.from(svgEl.querySelectorAll('rect[clip-path]'));
+              const fHeaders = filtered.headers;
+              const fData = filtered.data;
+              const chartLabels = fHeaders.slice(1);
+              const chartSeriesCount = fData.length;
+              const barIdx = chartLabels.indexOf(origHeader);
+              const segIdx = dataRowIdx;
 
-            if (!found) {
-              const rects = Array.from(svgEl.querySelectorAll('rect')).filter(r => {
-                const fill = r.getAttribute('fill') || '';
-                return fill !== T.bg && fill !== T.track && fill !== '#F8F8F8' && fill !== '#FFFFFF'
-                  && !fill.startsWith('url(') && r.getAttribute('height') !== String(vb.height || 750)
-                  && parseFloat(r.getAttribute('height') || 0) > 0;
-              });
-              const numSeries = filtered.headers.length - 1;
-              if (seriesIdx >= 0 && numLabels > 0 && rects.length >= numLabels) {
-                const targetIdx = dataRowIdx * numSeries + seriesIdx;
-                if (rects[targetIdx]) {
+              if (barIdx >= 0 && segIdx >= 0 && chartSeriesCount > 0) {
+                const targetIdx = barIdx * chartSeriesCount + segIdx;
+                if (segRects[targetIdx]) {
                   try {
-                    const bbox = rects[targetIdx].getBBox();
+                    const bbox = segRects[targetIdx].getBBox();
                     const box = document.createElement('div');
                     box.className = 'chart-hl-box';
                     const pad = 4;
@@ -1410,6 +1555,56 @@
                     dmChartPreview.appendChild(box);
                     found = true;
                   } catch(e) {}
+                }
+              }
+            } else {
+              const circles = Array.from(svgEl.querySelectorAll('circle:not([r="0"])'));
+              if (seriesIdx >= 0 && numLabels > 0) {
+                const targetCircleIdx = seriesIdx * numLabels + dataRowIdx;
+                const dataCircles = circles.filter(c => c.getAttribute('stroke') && c.getAttribute('stroke-width'));
+                if (dataCircles[targetCircleIdx]) {
+                  try {
+                    const bbox = dataCircles[targetCircleIdx].getBBox();
+                    const box = document.createElement('div');
+                    box.className = 'chart-hl-box';
+                    const pad = 8;
+                    box.style.left = (offsetX + (bbox.x - pad/2) * scaleX) + 'px';
+                    box.style.top = (offsetY + (bbox.y - pad/2) * scaleY) + 'px';
+                    box.style.width = ((bbox.width + pad) * scaleX) + 'px';
+                    box.style.height = ((bbox.height + pad) * scaleY) + 'px';
+                    box.style.borderColor = roleColors[colRole] || '#00B894';
+                    box.style.borderRadius = '50%';
+                    dmChartPreview.appendChild(box);
+                    found = true;
+                  } catch(e) {}
+                }
+              }
+
+              if (!found) {
+                const rects = Array.from(svgEl.querySelectorAll('rect')).filter(r => {
+                  const fill = r.getAttribute('fill') || '';
+                  return fill !== T.bg && fill !== T.track && fill !== '#F8F8F8' && fill !== '#FFFFFF'
+                    && !fill.startsWith('url(') && r.getAttribute('height') !== String(vb.height || 750)
+                    && parseFloat(r.getAttribute('height') || 0) > 0;
+                });
+                const numSeries = filtered.headers.length - 1;
+                if (seriesIdx >= 0 && numLabels > 0 && rects.length >= numLabels) {
+                  const targetIdx = dataRowIdx * numSeries + seriesIdx;
+                  if (rects[targetIdx]) {
+                    try {
+                      const bbox = rects[targetIdx].getBBox();
+                      const box = document.createElement('div');
+                      box.className = 'chart-hl-box';
+                      const pad = 4;
+                      box.style.left = (offsetX + (bbox.x - pad) * scaleX) + 'px';
+                      box.style.top = (offsetY + (bbox.y - pad) * scaleY) + 'px';
+                      box.style.width = ((bbox.width + pad*2) * scaleX) + 'px';
+                      box.style.height = ((bbox.height + pad*2) * scaleY) + 'px';
+                      box.style.borderColor = roleColors[colRole] || '#00B894';
+                      dmChartPreview.appendChild(box);
+                      found = true;
+                    } catch(e) {}
+                  }
                 }
               }
             }

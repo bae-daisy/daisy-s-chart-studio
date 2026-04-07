@@ -1235,7 +1235,14 @@
       btn.addEventListener('click', () => {
         panel.querySelectorAll('.kind-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        liveUpdate();
+        slide.chartKind = btn.dataset.kind;
+        // 에디터 재렌더링 (유형별 옵션이 달라지므로)
+        panel.remove();
+        wrapper.classList.remove('editing');
+        rerenderChart(slide, wrapper);
+        saveProject();
+        // 약간의 딜레이 후 에디터 다시 열기
+        requestAnimationFrame(() => toggleInlineEditor(slide, wrapper));
       });
     });
 

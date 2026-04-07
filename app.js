@@ -1153,7 +1153,7 @@
         </div>
         <div class="ie-field">
           <label>필터 정보</label>
-          <input type="text" class="ie-input" data-key="filterInfo" value="${_h(slide.filterInfo||'')}">
+          <input type="text" class="ie-input" data-key="filterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS:Android+iOS / 기간:?? / 성별:?? / 연령:??">
         </div>
         ${(() => {
           // 시리즈(열) 표시/숨김 토글 — 숫자 열이 2개 이상일 때만
@@ -2472,7 +2472,7 @@
           </div>
           <div class="editor-field">
             <label>필터 정보 (하단 표시)</label>
-            <input type="text" id="edFilterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS, 기간, 성별 등">
+            <input type="text" id="edFilterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS:Android+iOS / 기간:?? / 성별:?? / 연령:??">
           </div>
           ${(() => {
             const vlKind = slide.chartKind;

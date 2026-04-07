@@ -131,6 +131,19 @@ const SvgCharts = {
 
   _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
 
+  // 텍스트 폭 추정 (한글=fontSize*0.95, 영문/숫자=fontSize*0.55, 기타=fontSize*0.6)
+  _textW(str, fontSize) {
+    let w = 0;
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      if (code >= 0xAC00 && code <= 0xD7AF) w += fontSize * 0.95;       // 한글
+      else if (code >= 0x3000 && code <= 0x9FFF) w += fontSize * 0.95;  // CJK
+      else if (code >= 0x20 && code <= 0x7E) w += fontSize * 0.58;      // ASCII
+      else w += fontSize * 0.65;
+    }
+    return Math.ceil(w);
+  },
+
   // ── 라인 차트 ──
   line(title, subtitle, source, labels, series, colors, showValueLabels) {
     const W = T.W, padL = T.EDGE+60, padR = T.EDGE+40;
@@ -169,13 +182,24 @@ const SvgCharts = {
         });
       }
     });
-    let lx = W/2 - series.length*60;
-    series.forEach((s,si) => {
-      const c = colors[si] || T.SERIES[si%T.SERIES.length];
-      svg += `<line x1="${lx}" y1="${T.LEGEND_Y}" x2="${lx+20}" y2="${T.LEGEND_Y}" stroke="${c}" stroke-width="3"/>`;
-      svg += `<text x="${lx+28}" y="${T.LEGEND_Y+5}" font-size="13" fill="${T.textDark}">${this._esc(s.label)}</text>`;
-      lx += s.label.length*13 + 50;
-    });
+    const totalLegW = series.reduce((s,si2) => s + this._textW(si2.label, 13) + 42, 0);
+    const legRows = totalLegW > W - T.EDGE * 2 ? 2 : 1;
+    const legFontSize = legRows > 1 ? 11 : 13;
+    const totalLegW2 = series.reduce((s,si2) => s + this._textW(si2.label, legFontSize) + 36, 0);
+    const perRow = legRows > 1 ? Math.ceil(series.length / 2) : series.length;
+    for (let row = 0; row < legRows; row++) {
+      const rowItems = series.slice(row * perRow, (row + 1) * perRow);
+      const rowW = rowItems.reduce((s,si2) => s + this._textW(si2.label, legFontSize) + 36, 0);
+      let lx = Math.max(T.EDGE, W/2 - rowW/2);
+      const ly = T.LEGEND_Y + row * 20;
+      rowItems.forEach((s,i) => {
+        const si = row * perRow + i;
+        const c = colors[si] || T.SERIES[si%T.SERIES.length];
+        svg += `<line x1="${lx}" y1="${ly}" x2="${lx+16}" y2="${ly}" stroke="${c}" stroke-width="3"/>`;
+        svg += `<text x="${lx+22}" y="${ly+4}" font-size="${legFontSize}" fill="${T.textDark}">${this._esc(s.label)}</text>`;
+        lx += this._textW(s.label, legFontSize) + 36;
+      });
+    }
     return this._wrap(title, subtitle, source, svg);
   },
 
@@ -206,13 +230,23 @@ const SvgCharts = {
       svg += `<text x="${gx+gW/2}" y="${cBot+24}" text-anchor="middle" fill="${T.textMuted}" font-size="12">${this._esc(l)}</text>`;
     });
     if (series.length>1) {
-      let lx = W/2-series.length*60;
-      series.forEach((s,si) => {
-        const c=colors[si]||T.SERIES[si%T.SERIES.length];
-        svg += `<rect x="${lx}" y="${T.LEGEND_Y-6}" width="12" height="12" rx="3" fill="${c}"/>`;
-        svg += `<text x="${lx+18}" y="${T.LEGEND_Y+5}" font-size="12" fill="${T.textDark}">${this._esc(s.label)}</text>`;
-        lx += s.label.length*12+40;
-      });
+      const totalLegW = series.reduce((s,sr) => s + this._textW(sr.label, 12) + 32, 0);
+      const legRows = totalLegW > W - T.EDGE * 2 ? 2 : 1;
+      const lfs = legRows > 1 ? 10 : 12;
+      const perRow = legRows > 1 ? Math.ceil(series.length / 2) : series.length;
+      for (let row = 0; row < legRows; row++) {
+        const rowItems = series.slice(row * perRow, (row + 1) * perRow);
+        const rowW = rowItems.reduce((s,sr) => s + this._textW(sr.label, lfs) + 28, 0);
+        let lx = Math.max(T.EDGE, W/2 - rowW/2);
+        const ly = T.LEGEND_Y + row * 18;
+        rowItems.forEach((s,i) => {
+          const si = row * perRow + i;
+          const c=colors[si]||T.SERIES[si%T.SERIES.length];
+          svg += `<rect x="${lx}" y="${ly-6}" width="12" height="12" rx="3" fill="${c}"/>`;
+          svg += `<text x="${lx+16}" y="${ly+4}" font-size="${lfs}" fill="${T.textDark}">${this._esc(s.label)}</text>`;
+          lx += this._textW(s.label, lfs)+28;
+        });
+      }
     }
     return this._wrap(title, subtitle, source, svg);
   },
@@ -346,13 +380,13 @@ const SvgCharts = {
     });
 
     // 범례 (중앙 정렬)
-    const totalLegW = series.reduce((s, sr) => s + sr.label.length * 10 + 35, 0);
+    const totalLegW = series.reduce((s, sr) => s + this._textW(sr.label, 12) + 28, 0);
     let lx = (W - totalLegW) / 2;
     series.forEach((sr, si) => {
       const c = segColors[si % segColors.length];
       svg += `<circle cx="${lx + 5}" cy="${T.LEGEND_Y}" r="5" fill="${c}"/>`;
       svg += `<text x="${lx + 16}" y="${T.LEGEND_Y + 4}" font-size="12" fill="${T.textDark}">${this._esc(sr.label)}</text>`;
-      lx += sr.label.length * 10 + 35;
+      lx += this._textW(sr.label, 12) + 28;
     });
 
     return this._wrap(title, subtitle, source, svg);
@@ -500,7 +534,7 @@ const SvgCharts = {
       const c = colors[si % colors.length] || T.SERIES[si % T.SERIES.length];
       svg += `<circle cx="${lx + 6}" cy="${T.LEGEND_Y}" r="5" fill="${c}"/>`;
       svg += `<text x="${lx + 16}" y="${T.LEGEND_Y + 4}" font-size="12" fill="${T.textDark}">${this._esc(sr.label)}</text>`;
-      lx += sr.label.length * 10 + 40;
+      lx += this._textW(sr.label, 12) + 30;
     });
 
     return this._wrap(title, subtitle, source, svg);
@@ -786,7 +820,7 @@ const SvgCharts = {
       const cx = toX(p.x), cy = toY(p.y);
       const r = 22;
       const labelText = this._esc(p.label);
-      const labelW = p.label.length * 7 + 16;
+      const labelW = this._textW(p.label, 11) + 16;
       const labelH = 20;
       const labelX = cx - labelW / 2;
       const labelY = cy - r - 22;

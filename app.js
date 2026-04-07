@@ -141,7 +141,7 @@
     const banner = document.createElement('div');
     banner.className = 'text-edit-banner';
     banner.innerHTML = '✍️ 텍스트를 클릭하면 수정할 수 있어요 <button class="text-edit-done">완료</button>';
-    chartArea.appendChild(banner);
+    document.body.appendChild(banner);
     banner.querySelector('.text-edit-done').addEventListener('click', () => {
       exitTextEditMode(chartArea, svgEl, btn);
     });
@@ -161,7 +161,7 @@
     chartArea.classList.remove('text-edit-mode');
     btn.classList.remove('active');
     svgEl.style.pointerEvents = '';
-    const banner = chartArea.querySelector('.text-edit-banner');
+    const banner = document.body.querySelector('.text-edit-banner');
     if (banner) banner.remove();
     const overlay = chartArea.querySelector('.text-edit-overlay');
     if (overlay) overlay.remove();

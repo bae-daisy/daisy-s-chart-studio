@@ -1070,58 +1070,34 @@
     const truncatedRows = fullData.length > maxPreviewRows;
 
     // 열 역할 드롭다운 행
-    const colRoleRowHTML = `<tr class="ie-preview-role-row">
-      <th class="ie-row-role-corner"></th>
-      ${allHeaders.slice(0, previewColCount).map((_, ci) => {
-        const r = slide.colRoles[ci] || 'value';
-        return `<th><select class="ie-col-role" data-col="${ci}" style="border-color:${roleColors[r]};color:${roleColors[r]}">
-          ${Object.entries(colRoleOpts).map(([k,v]) => `<option value="${k}" ${r===k?'selected':''}>${v}</option>`).join('')}
-        </select></th>`;
-      }).join('')}
-      ${truncatedCols ? '<th></th>' : ''}
-    </tr>`;
-
     // 헤더 행
     const headerRowHTML = `<tr>
-      <th class="ie-row-role-corner ie-row-role-label">행</th>
       ${allHeaders.slice(0, previewColCount).map((h, ci) => {
-        const r = slide.colRoles[ci] || 'value';
-        return `<th class="ie-preview-th" data-role="${r}" data-ci="${ci}">${_h(h)}</th>`;
+        return `<th class="ie-preview-th">${_h(h)}</th>`;
       }).join('')}
       ${truncatedCols ? `<th class="ie-preview-th ie-preview-more">+${allHeaders.length - previewColCount}</th>` : ''}
     </tr>`;
 
-    // 데이터 행 (왼쪽에 행 역할 태그)
+    // 데이터 행
     const dataRowsHTML = previewRows.map((row, ri) => {
-      const rr = slide.rowRoles[ri] || 'data';
-      return `<tr data-row="${ri}" data-rowrole="${rr}">
-        <td class="ie-row-role-cell">
-          <button class="ie-row-tag" data-row="${ri}" data-role="${rr}" style="background:${rr==='data' ? roleColors.data : roleColors.ignore}">${rr==='data'?'✓':'✕'}</button>
-        </td>
+      return `<tr data-row="${ri}">
         ${row.slice(0, previewColCount).map((cell, ci) => {
-          const cr = slide.colRoles[ci] || 'value';
-          return `<td class="ie-preview-td" data-role="${cr}" data-rowrole="${rr}">${_h(cell || '')}</td>`;
+          return `<td class="ie-preview-td">${_h(cell || '')}</td>`;
         }).join('')}
         ${truncatedCols ? '<td class="ie-preview-td ie-preview-more">…</td>' : ''}
       </tr>`;
     }).join('');
 
     const moreRowHTML = truncatedRows
-      ? `<tr><td class="ie-row-role-cell"></td><td class="ie-preview-td ie-preview-more" colspan="${previewColCount + (truncatedCols?1:0)}">… 외 ${fullData.length - maxPreviewRows}행</td></tr>`
+      ? `<tr><td class="ie-preview-td ie-preview-more" colspan="${previewColCount + (truncatedCols?1:0)}">… 외 ${fullData.length - maxPreviewRows}행</td></tr>`
       : '';
 
     const previewHTML = `<div class="ie-preview-wrap">
       <div class="ie-preview-scroll">
         <table class="ie-preview-table">
-          <thead>${colRoleRowHTML}${headerRowHTML}</thead>
+          <thead>${headerRowHTML}</thead>
           <tbody>${dataRowsHTML}${moreRowHTML}</tbody>
         </table>
-      </div>
-      <div class="ie-preview-legend">
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#6C5CE7"></span>이름</span>
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#00B894"></span>숫자</span>
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#FDCB6E"></span>구분</span>
-        <span class="ie-legend-item"><span class="ie-legend-dot" style="background:#B2BEC3"></span>제외</span>
       </div>
     </div>`;
 
@@ -1302,45 +1278,6 @@
         liveUpdate();
       });
     }
-
-    // ── 열 역할 선택 ──
-    panel.querySelectorAll('.ie-col-role').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const ci = Number(sel.dataset.col);
-        const role = sel.value;
-        slide.colRoles[ci] = role;
-        sel.style.borderColor = roleColors[role];
-        sel.style.color = roleColors[role];
-        // 헤더 셀 업데이트
-        const th = panel.querySelector(`.ie-preview-th[data-ci="${ci}"]`);
-        if (th) th.dataset.role = role;
-        // 데이터 셀 업데이트
-        panel.querySelectorAll(`.ie-preview-table tbody tr[data-row]`).forEach(tr => {
-          const tds = tr.querySelectorAll('.ie-preview-td');
-          if (tds[ci]) tds[ci].dataset.role = role;
-        });
-        liveUpdate();
-      });
-    });
-
-    // ── 행 역할 토글 (✓ ↔ ✕) ──
-    panel.querySelectorAll('.ie-row-tag').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const ri = Number(btn.dataset.row);
-        const cur = slide.rowRoles[ri] || 'data';
-        const next = cur === 'data' ? 'ignore' : 'data';
-        slide.rowRoles[ri] = next;
-        btn.dataset.role = next;
-        btn.textContent = next === 'data' ? '✓' : '✕';
-        btn.style.background = next === 'data' ? roleColors.data : roleColors.ignore;
-        const tr = panel.querySelector(`tr[data-row="${ri}"]`);
-        if (tr) {
-          tr.dataset.rowrole = next;
-          tr.querySelectorAll('.ie-preview-td').forEach(td => td.dataset.rowrole = next);
-        }
-        liveUpdate();
-      });
-    });
 
     // ── 차트 내 데이터 위치 하이라이트 헬퍼 ──
     function highlightInChart(ri, ci, sourceEl) {

@@ -896,51 +896,63 @@
 
     wrapper.appendChild(chartArea);
 
-    // 텍스트 수정 모드 토글
-    toolbar.querySelector('.text-edit-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      toggleTextEditMode(el, chartArea, toolbar.querySelector('.text-edit-btn'));
-    });
+    // ── 툴바 이벤트 위임 (innerHTML 재생성에도 유지) ──
+    toolbar.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
 
-    // 편집 버튼 → 인라인 에디터 토글
-    toolbar.querySelector('.edit-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      e.preventDefault();
-      try { toggleInlineEditor(slide, wrapper); } catch(err) { alert('에디터 오류: ' + err.message); console.error(err); }
-    });
-    // PNG 다운로드
-    toolbar.querySelector('.dl-png-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      const svgEl = el.querySelector('svg');
-      const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
-      prep.then(() => html2canvas(el, { scale: 3, backgroundColor: '#F8F8F8', useCORS: true })).then(c => {
-        c.toBlob(b => { if(b) { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`${slide.title}.png`; a.click(); } }, 'image/png');
-      });
-    });
-    // SVG 다운로드
-    toolbar.querySelector('.dl-svg-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      const svgEl = el.querySelector('svg');
-      if (!svgEl) { alert('SVG 차트만 다운로드 가능합니다.'); return; }
-      inlineSvgImages(svgEl).then(() => {
-        const str = new XMLSerializer().serializeToString(svgEl);
-        const blob = new Blob([str], {type:'image/svg+xml'});
-        const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${slide.title}.svg`; a.click();
-      });
-    });
-    // 장표 삭제
-    toolbar.querySelector('.del-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      if (!confirm('이 장표를 삭제하시겠어요?')) return;
-      const idx = slides.indexOf(slide);
-      if (idx >= 0) slides.splice(idx, 1);
-      wrapper.style.transition = 'opacity 0.3s, transform 0.3s';
-      wrapper.style.opacity = '0'; wrapper.style.transform = 'translateY(-10px)';
-      setTimeout(() => { wrapper.remove(); updateProjectHeader(); saveProject(); }, 300);
-      if (slides.length === 0) {
-        results.style.display = 'none';
-        onboarding.style.display = '';
-        localStorage.removeItem('cs-project');
+      // 텍스트 수정
+      if (btn.classList.contains('text-edit-btn')) {
+        e.stopPropagation();
+        const chartEl = chartArea.querySelector('.chart-slide');
+        toggleTextEditMode(chartEl, chartArea, btn);
+        return;
+      }
+      // 설정
+      if (btn.classList.contains('edit-btn')) {
+        e.stopPropagation();
+        try { toggleInlineEditor(slide, wrapper); } catch(err) { alert('에디터 오류: ' + err.message); console.error(err); }
+        return;
+      }
+      // PNG
+      if (btn.classList.contains('dl-png-btn')) {
+        e.stopPropagation();
+        const chartEl = chartArea.querySelector('.chart-slide');
+        const svgEl = chartEl.querySelector('svg');
+        const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
+        prep.then(() => html2canvas(chartEl, { scale: 3, backgroundColor: '#F8F8F8', useCORS: true })).then(c => {
+          c.toBlob(b => { if(b) { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`${slide.title}.png`; a.click(); } }, 'image/png');
+        });
+        return;
+      }
+      // SVG
+      if (btn.classList.contains('dl-svg-btn')) {
+        e.stopPropagation();
+        const chartEl = chartArea.querySelector('.chart-slide');
+        const svgEl = chartEl.querySelector('svg');
+        if (!svgEl) { alert('SVG 차트만 다운로드 가능합니다.'); return; }
+        inlineSvgImages(svgEl).then(() => {
+          const str = new XMLSerializer().serializeToString(svgEl);
+          const blob = new Blob([str], {type:'image/svg+xml'});
+          const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${slide.title}.svg`; a.click();
+        });
+        return;
+      }
+      // 삭제
+      if (btn.classList.contains('del-btn')) {
+        e.stopPropagation();
+        if (!confirm('이 장표를 삭제하시겠어요?')) return;
+        const idx = slides.indexOf(slide);
+        if (idx >= 0) slides.splice(idx, 1);
+        wrapper.style.transition = 'opacity 0.3s, transform 0.3s';
+        wrapper.style.opacity = '0'; wrapper.style.transform = 'translateY(-10px)';
+        setTimeout(() => { wrapper.remove(); updateProjectHeader(); saveProject(); }, 300);
+        if (slides.length === 0) {
+          results.style.display = 'none';
+          onboarding.style.display = '';
+          localStorage.removeItem('cs-project');
+        }
+        return;
       }
     });
 

@@ -1156,31 +1156,22 @@
           <input type="text" class="ie-input" data-key="filterInfo" value="${_h(slide.filterInfo||'')}">
         </div>
         ${(() => {
-          // 값 라벨 표시 토글 (라인/세로바/콤보 등 시리즈가 있는 차트)
-          const vlKind = slide.chartKind;
-          const vlTypes = ['line','verticalBar','combo','stackedBar'];
-          if (!vlTypes.includes(vlKind)) return '';
-          const vlNames = [];
-          if (vlKind === 'line' || vlKind === 'verticalBar' || vlKind === 'stackedBar') {
-            for (let i = 1; i < allHeaders.length; i++) {
-              if (fullData.some(r => !isNaN(Number(r[i])))) vlNames.push({ idx: i - 1, name: allHeaders[i] });
-            }
-          } else if (vlKind === 'combo') {
-            vlNames.push({ idx: 0, name: allHeaders[1] || '막대' });
-            vlNames.push({ idx: 1, name: allHeaders[2] || '꺾은선' });
+          // 시리즈(열) 표시/숨김 토글 — 숫자 열이 2개 이상일 때만
+          const seriesNames = [];
+          for (let i = 1; i < allHeaders.length; i++) {
+            if (fullData.some(r => !isNaN(Number(r[i])))) seriesNames.push({ idx: i, name: allHeaders[i] });
           }
-          if (vlNames.length === 0) return '';
-          if (!slide.showValueLabels) slide.showValueLabels = vlNames.map(() => true);
-          while (slide.showValueLabels.length < vlNames.length) slide.showValueLabels.push(true);
-          const items = vlNames.map(v => {
-            const on = slide.showValueLabels[v.idx] !== false;
+          if (seriesNames.length < 2) return '';
+          // colRoles 기반: 'ignore'면 숨김
+          const items = seriesNames.map(s => {
+            const hidden = slide.colRoles && slide.colRoles[s.idx] === 'ignore';
             return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:2px 0">
-              <input type="checkbox" class="ie-vl-check" data-si="${v.idx}" ${on ? 'checked' : ''} style="accent-color:var(--accent);width:15px;height:15px">
-              <span style="${on ? '' : 'opacity:0.4'}">${v.name}</span>
+              <input type="checkbox" class="ie-series-check" data-col="${s.idx}" ${!hidden ? 'checked' : ''} style="accent-color:var(--accent);width:15px;height:15px">
+              <span style="${!hidden ? '' : 'opacity:0.4'}">${_h(s.name)}</span>
             </label>`;
           }).join('');
           return `<div class="ie-field">
-            <label>값 라벨 표시</label>
+            <label>📊 표시할 시리즈</label>
             <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
           </div>`;
         })()}
@@ -1290,12 +1281,12 @@
     panel.querySelectorAll('.ie-input').forEach(inp => inp.addEventListener('input', liveUpdate));
     panel.querySelectorAll('.ie-select').forEach(sel => sel.addEventListener('change', liveUpdate));
 
-    // 값 라벨 토글
-    panel.querySelectorAll('.ie-vl-check').forEach(cb => {
+    // 시리즈 표시/숨김 토글
+    panel.querySelectorAll('.ie-series-check').forEach(cb => {
       cb.addEventListener('change', () => {
-        const si = Number(cb.dataset.si);
-        if (!slide.showValueLabels) slide.showValueLabels = [];
-        slide.showValueLabels[si] = cb.checked;
+        const ci = Number(cb.dataset.col);
+        if (!slide.colRoles) slide.colRoles = allHeaders.map((_, i) => i === 0 ? 'label' : 'value');
+        slide.colRoles[ci] = cb.checked ? 'value' : 'ignore';
         const span = cb.parentElement.querySelector('span');
         if (span) span.style.opacity = cb.checked ? '1' : '0.4';
         liveUpdate();
@@ -2485,10 +2476,10 @@
           </div>
           ${(() => {
             const vlKind = slide.chartKind;
-            const vlTypes = ['line','verticalBar','combo','stackedBar'];
+            const vlTypes = ['line','combo'];
             if (!vlTypes.includes(vlKind)) return '';
             const vlNames = [];
-            if (vlKind === 'line' || vlKind === 'verticalBar' || vlKind === 'stackedBar') {
+            if (vlKind === 'line') {
               for (let i = 1; i < allHeaders.length; i++) {
                 if (fullData.some(r => !isNaN(Number(r[i])))) vlNames.push({ idx: i - 1, name: allHeaders[i] });
               }

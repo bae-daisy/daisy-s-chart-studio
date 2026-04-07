@@ -839,7 +839,7 @@
       toolbar.innerHTML = `
         <span class="st-slide-num">장표 ${slides.indexOf(slide) + 1}</span>
         <div class="kd-wrap">
-          <button class="kd-trigger">${dd.currentIcon} ${dd.currentLabel} <span class="kd-change">변경</span><span class="kd-arrow">▾</span></button>
+          <button class="kd-trigger">${dd.currentIcon} ${dd.currentLabel} <span class="kd-change">변경하기</span><span class="kd-arrow">▾</span></button>
           <div class="kd-popup">${dd.popupHtml}</div>
         </div>
         <div class="st-actions">
@@ -1000,7 +1000,7 @@
     const trigger = chartArea.querySelector('.kd-trigger');
     if (trigger) {
       const current = T.KINDS[slide.chartKind] || { icon: '📊', label: '차트' };
-      trigger.innerHTML = `${current.icon} ${current.label} <span class="kd-change">변경</span><span class="kd-arrow">▾</span>`;
+      trigger.innerHTML = `${current.icon} ${current.label} <span class="kd-change">변경하기</span><span class="kd-arrow">▾</span>`;
     }
   }
 

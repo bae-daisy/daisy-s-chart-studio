@@ -27,23 +27,23 @@
   const slides = [];
   let projectName = '새 프로젝트';
 
-  // 카테고리별 차트 유형 — 장표 상단 탭바용 (컴팩트 가로)
-  function buildKindTabBarHTML(activeKind, recommended, slideIdx) {
+  // 카테고리별 차트 유형 — 장표 상단 드롭다운용
+  function buildKindDropdownHTML(activeKind, recommended) {
     const cats = T.KIND_CATEGORIES;
-    let html = `<span class="kt-slide-num">장표 ${slideIdx + 1}</span><span class="kt-divider"></span>`;
+    const current = T.KINDS[activeKind] || { icon: '📊', label: '차트' };
+    let popupHtml = '';
     Object.entries(cats).forEach(([catKey, cat]) => {
       const kinds = Object.entries(T.KINDS).filter(([k, v]) => v.category === catKey);
       if (kinds.length === 0) return;
-      html += `<div class="kt-group">`;
+      popupHtml += `<div class="kd-cat"><div class="kd-cat-label">${cat.icon} ${cat.label}</div><div class="kd-cat-items">`;
       kinds.forEach(([k, v]) => {
         const isActive = activeKind === k ? ' active' : '';
         const isRec = recommended.includes(k);
-        const label = v.label.length > 4 ? v.label.slice(0, 4) : v.label;
-        html += `<button class="kt-btn${isActive}" data-kind="${k}" title="${v.label}">${v.icon} ${label}${isRec ? '<i class="kt-rec">추천</i>' : ''}</button>`;
+        popupHtml += `<button class="kd-item${isActive}" data-kind="${k}">${v.icon} ${v.label}${isRec ? '<span class="kd-rec">추천</span>' : ''}</button>`;
       });
-      html += `</div>`;
+      popupHtml += `</div></div>`;
     });
-    return html;
+    return { currentIcon: current.icon, currentLabel: current.label, popupHtml };
   }
 
   // 카테고리별 차트 유형 HTML 생성 (설정 패널용 — 기존)
@@ -828,33 +828,63 @@
     const chartArea = document.createElement('div');
     chartArea.className = 'slide-chart-area';
 
-    // ── 차트 유형 탭바 (장표 상단) ──
+    // ── 장표 상단 툴바 ──
     const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
     const recommended = T.RECOMMENDED[dataType] || [];
-    const kindBar = document.createElement('div');
-    kindBar.className = 'kind-tab-bar';
-    kindBar.innerHTML = buildKindTabBarHTML(slide.chartKind, recommended, slides.indexOf(slide));
-    chartArea.appendChild(kindBar);
+    const toolbar = document.createElement('div');
+    toolbar.className = 'slide-toolbar';
 
-    // 탭바 클릭 이벤트
-    kindBar.addEventListener('click', e => {
-      const btn = e.target.closest('.kt-btn');
-      if (!btn) return;
-      const newKind = btn.dataset.kind;
-      if (newKind === slide.chartKind) return;
-      slide.chartKind = newKind;
-      // 탭바 active 업데이트
-      kindBar.querySelectorAll('.kt-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      // 차트 리렌더
-      rerenderChart(slide, wrapper);
-      saveProject();
-      // 인라인 에디터가 열려있으면 재렌더링
-      const existingEditor = wrapper.querySelector('.inline-editor');
-      if (existingEditor) {
-        existingEditor.remove();
-        wrapper.classList.remove('editing');
-        requestAnimationFrame(() => toggleInlineEditor(slide, wrapper));
+    function renderToolbarContent() {
+      const dd = buildKindDropdownHTML(slide.chartKind, recommended);
+      toolbar.innerHTML = `
+        <span class="st-slide-num">장표 ${slides.indexOf(slide) + 1}</span>
+        <div class="kd-wrap">
+          <button class="kd-trigger">${dd.currentIcon} ${dd.currentLabel} <span class="kd-arrow">▾</span></button>
+          <div class="kd-popup">${dd.popupHtml}</div>
+        </div>
+        <div class="st-actions">
+          <button class="st-btn text-edit-btn" title="텍스트 수정">Aa</button>
+          <button class="st-btn edit-btn" title="장표 설정">⚙️</button>
+          <button class="st-btn dl-png-btn" title="PNG 다운로드">PNG</button>
+          <button class="st-btn dl-svg-btn" title="SVG 다운로드">SVG</button>
+          <button class="st-btn del-btn" title="삭제">🗑️</button>
+        </div>
+      `;
+    }
+    renderToolbarContent();
+    chartArea.appendChild(toolbar);
+
+    // 드롭다운 토글
+    toolbar.addEventListener('click', e => {
+      const trigger = e.target.closest('.kd-trigger');
+      if (trigger) {
+        e.stopPropagation();
+        const popup = toolbar.querySelector('.kd-popup');
+        popup.classList.toggle('open');
+        // 외부 클릭으로 닫기
+        const closePopup = (ev) => { if (!popup.contains(ev.target) && ev.target !== trigger) { popup.classList.remove('open'); document.removeEventListener('click', closePopup); } };
+        if (popup.classList.contains('open')) setTimeout(() => document.addEventListener('click', closePopup), 0);
+        return;
+      }
+      // 차트 유형 선택
+      const item = e.target.closest('.kd-item');
+      if (item) {
+        const newKind = item.dataset.kind;
+        if (newKind !== slide.chartKind) {
+          slide.chartKind = newKind;
+          rerenderChart(slide, wrapper);
+          saveProject();
+          // 인라인 에디터가 열려있으면 재렌더링
+          const existingEditor = wrapper.querySelector('.inline-editor');
+          if (existingEditor) {
+            existingEditor.remove();
+            wrapper.classList.remove('editing');
+            requestAnimationFrame(() => toggleInlineEditor(slide, wrapper));
+          }
+        }
+        renderToolbarContent();
+        toolbar.querySelector('.kd-popup').classList.remove('open');
+        return;
       }
     });
 
@@ -862,34 +892,24 @@
     el.dataset.slideId = slide.id;
     chartArea.appendChild(el);
 
-    // 액션 버튼을 탭바 오른쪽에 통합
-    const actionsHtml = `<div class="kt-actions">
-      <button class="kt-act-btn text-edit-btn" title="텍스트 수정">Aa</button>
-      <button class="kt-act-btn edit-btn" title="장표 설정">⚙️</button>
-      <button class="kt-act-btn dl-png-btn" title="PNG 다운로드">PNG</button>
-      <button class="kt-act-btn dl-svg-btn" title="SVG 다운로드">SVG</button>
-      <button class="kt-act-btn del-btn" title="삭제">🗑️</button>
-    </div>`;
-    kindBar.insertAdjacentHTML('beforeend', actionsHtml);
-
     chartArea.style.position = 'relative';
 
     wrapper.appendChild(chartArea);
 
     // 텍스트 수정 모드 토글
-    kindBar.querySelector('.text-edit-btn').addEventListener('click', e => {
+    toolbar.querySelector('.text-edit-btn').addEventListener('click', e => {
       e.stopPropagation();
-      toggleTextEditMode(el, chartArea, kindBar.querySelector('.text-edit-btn'));
+      toggleTextEditMode(el, chartArea, toolbar.querySelector('.text-edit-btn'));
     });
 
     // 편집 버튼 → 인라인 에디터 토글
-    kindBar.querySelector('.edit-btn').addEventListener('click', e => {
+    toolbar.querySelector('.edit-btn').addEventListener('click', e => {
       e.stopPropagation();
       e.preventDefault();
       try { toggleInlineEditor(slide, wrapper); } catch(err) { alert('에디터 오류: ' + err.message); console.error(err); }
     });
     // PNG 다운로드
-    kindBar.querySelector('.dl-png-btn').addEventListener('click', e => {
+    toolbar.querySelector('.dl-png-btn').addEventListener('click', e => {
       e.stopPropagation();
       const svgEl = el.querySelector('svg');
       const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
@@ -898,7 +918,7 @@
       });
     });
     // SVG 다운로드
-    kindBar.querySelector('.dl-svg-btn').addEventListener('click', e => {
+    toolbar.querySelector('.dl-svg-btn').addEventListener('click', e => {
       e.stopPropagation();
       const svgEl = el.querySelector('svg');
       if (!svgEl) { alert('SVG 차트만 다운로드 가능합니다.'); return; }
@@ -909,7 +929,7 @@
       });
     });
     // 장표 삭제
-    kindBar.querySelector('.del-btn').addEventListener('click', e => {
+    toolbar.querySelector('.del-btn').addEventListener('click', e => {
       e.stopPropagation();
       if (!confirm('이 장표를 삭제하시겠어요?')) return;
       const idx = slides.indexOf(slide);
@@ -964,10 +984,11 @@
 
     if (oldChart) oldChart.replaceWith(newEl);
 
-    // 탭바 active 동기화
-    const kindBar = chartArea.querySelector('.kind-tab-bar');
-    if (kindBar) {
-      kindBar.querySelectorAll('.kt-btn').forEach(b => b.classList.toggle('active', b.dataset.kind === slide.chartKind));
+    // 드롭다운 트리거 텍스트 동기화
+    const trigger = chartArea.querySelector('.kd-trigger');
+    if (trigger) {
+      const current = T.KINDS[slide.chartKind] || { icon: '📊', label: '차트' };
+      trigger.innerHTML = `${current.icon} ${current.label} <span class="kd-arrow">▾</span>`;
     }
   }
 

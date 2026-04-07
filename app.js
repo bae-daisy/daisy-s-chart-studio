@@ -1175,16 +1175,13 @@
             <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
           </div>`;
         })()}
+        <details class="ie-advanced">
+          <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
+          <div class="ie-advanced-body">
         <div class="ie-field">
           <div class="ie-preview-header-row">
             <label>📋 데이터 미리보기 <span class="ie-preview-summary">${summaryText}</span></label>
             <button class="ie-expand-btn" title="전체 데이터 보기">🔍 확대</button>
-          </div>
-          <div class="ie-role-callout">
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#6C5CE7"></span><span class="ie-callout-name">이름</span> 기간, 앱명, 항목 등 구분짓는 이름</div>
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#00B894"></span><span class="ie-callout-name">숫자</span> 차트에 표시할 숫자 데이터</div>
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#FDCB6E"></span><span class="ie-callout-name">구분</span> 여러 선/막대를 나누는 그룹</div>
-            <div class="ie-callout-row"><span class="ie-callout-dot" style="background:#B2BEC3"></span><span class="ie-callout-name">제외</span> 차트에서 빼기</div>
           </div>
           <div class="ie-preview-hint">셀을 클릭하면 차트에서 위치를 확인할 수 있어요</div>
           ${previewHTML}
@@ -1214,6 +1211,8 @@
             <select class="ie-select" data-key="rangeEnd">${rangeOptions}</select>
           </div>
         </div>` : ''}
+          </div>
+        </details>
       </div>
     `;
 

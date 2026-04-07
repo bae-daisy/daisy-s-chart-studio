@@ -1847,3 +1847,33 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   border-radius: 5px;
 }
 .kd-item.active .kd-rec { background: rgba(255,255,255,0.3); color: #FFF; }
+
+/* ── 고급 설정 토글 ── */
+.ie-advanced {
+  margin-top: 8px;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ie-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  transition: all 0.15s;
+}
+.ie-advanced-toggle::-webkit-details-marker { display: none; }
+.ie-advanced-toggle::after {
+  content: '▸';
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.ie-advanced[open] .ie-advanced-toggle::after { transform: rotate(90deg); }
+.ie-advanced-toggle:hover { color: var(--accent); background: #F5F3FF; }
+.ie-advanced-body { padding: 8px 14px 14px; }

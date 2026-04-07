@@ -830,7 +830,7 @@
 
     // ── 장표 상단 툴바 ──
     const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
-    const recommended = T.RECOMMENDED[dataType] || [];
+    const recommended = Parser.getRecommendedKinds(dataType, slide.parsed?.headers || [], slide.parsed?.data || []);
     const toolbar = document.createElement('div');
     toolbar.className = 'slide-toolbar';
 
@@ -1129,7 +1129,10 @@
         </div>
         <div class="ie-field">
           <label>필터 정보</label>
-          <input type="text" class="ie-input" data-key="filterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS:Android+iOS / 기간:?? / 성별:?? / 연령:??">
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" class="ie-input" data-key="filterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS: Android+iOS / 기간: 2024.03 / 성별: 전체 / 연령: 전체" style="flex:1">
+            <button type="button" class="btn-filter-example" title="예시 채우기" style="white-space:nowrap;padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5ff;cursor:pointer;font-size:12px;">예시</button>
+          </div>
         </div>
         ${(() => {
           // 시리즈(열) 표시/숨김 토글 — 숫자 열이 2개 이상일 때만
@@ -1151,6 +1154,23 @@
             <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
           </div>`;
         })()}
+        <div class="ie-field">
+          <label>🔢 숫자 표시</label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <input type="checkbox" class="ie-val-label-toggle" ${slide.hideValueLabels ? '' : 'checked'} style="accent-color:var(--accent);width:15px;height:15px">
+              <span>값 표시</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:12px;color:var(--text-muted)">소수점</span>
+              <select class="ie-select ie-decimal-select" style="width:auto;padding:4px 8px;font-size:12px">
+                <option value="0" ${(slide.decimalPlaces||0)===0?'selected':''}>없음</option>
+                <option value="1" ${slide.decimalPlaces===1?'selected':''}>1자리</option>
+                <option value="2" ${slide.decimalPlaces===2?'selected':''}>2자리</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <details class="ie-advanced">
           <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
           <div class="ie-advanced-body">
@@ -1267,6 +1287,24 @@
         liveUpdate();
       });
     });
+
+    // 값 라벨 표시 토글
+    const vlToggle = panel.querySelector('.ie-val-label-toggle');
+    if (vlToggle) {
+      vlToggle.addEventListener('change', () => {
+        slide.hideValueLabels = !vlToggle.checked;
+        liveUpdate();
+      });
+    }
+
+    // 소수점 자릿수
+    const decSelect = panel.querySelector('.ie-decimal-select');
+    if (decSelect) {
+      decSelect.addEventListener('change', () => {
+        slide.decimalPlaces = Number(decSelect.value);
+        liveUpdate();
+      });
+    }
 
     // 행/열 바꾸기
     const transposeBtn = panel.querySelector('.ie-transpose');
@@ -1960,8 +1998,10 @@
     const parsed = applyVisibleCols(slide);
     const { type, headers, data, meta } = parsed;
 
-    // 전역 filterInfo 설정 (SVG _wrap에서 자동 사용)
+    // 전역 설정 (SVG 차트에서 참조)
     SvgCharts._filterInfo = filterInfo || '';
+    SvgCharts._hideValueLabels = slide.hideValueLabels || false;
+    SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
 
     switch (chartKind) {
       case 'line': return buildLine(slide, parsed);
@@ -2408,7 +2448,10 @@
           </div>
           <div class="editor-field">
             <label>필터 정보 (하단 표시)</label>
-            <input type="text" id="edFilterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS:Android+iOS / 기간:?? / 성별:?? / 연령:??">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" id="edFilterInfo" value="${_h(slide.filterInfo||'')}" placeholder="OS: Android+iOS / 기간: 2024.03 / 성별: 전체 / 연령: 전체" style="flex:1">
+              <button type="button" class="btn-filter-example" title="예시 채우기" style="white-space:nowrap;padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5ff;cursor:pointer;font-size:12px;">예시</button>
+            </div>
           </div>
           ${(() => {
             const vlKind = slide.chartKind;

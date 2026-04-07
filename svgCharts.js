@@ -157,7 +157,7 @@ const SvgCharts = {
     for (let i=0;i<=4;i++) {
       const tick = yMin+(yR/4)*i, y = toY(tick);
       svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;
-      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="13">${T.fmtTick(tick)}</text>`;
+      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="13">${T.fmtTick(tick, SvgCharts._decimalPlaces)}</text>`;
     }
     const skip = labels.length>15 ? Math.ceil(labels.length/10) : 1;
     labels.forEach((l,i) => {
@@ -172,13 +172,13 @@ const SvgCharts = {
       svg += `<path d="${this._smoothArea(pts, toY(yMin))}" fill="url(#${gradId})"/>`;
       svg += `<path d="${this._smooth(pts)}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
       if (s.data.length<=30) pts.forEach(([x,y])=>svg+=`<circle cx="${x}" cy="${y}" r="3.5" fill="${T.bg}" stroke="${c}" stroke-width="2.5"/>`);
-      // 값 라벨: showValueLabels 배열로 시리즈별 on/off
-      const vlVisible = !showValueLabels || showValueLabels[si] !== false;
-      if (vlVisible) {
+      // 값 라벨
+      if (!SvgCharts._hideValueLabels) {
+        const dp = SvgCharts._decimalPlaces;
         const every = s.data.length<=12?1:s.data.length<=20?2:Math.ceil(s.data.length/8);
         s.data.forEach((v,i) => {
           if (i%every!==0 && i!==s.data.length-1) return;
-          svg += `<text x="${toX(i)}" y="${toY(v)-12}" text-anchor="middle" fill="${T.textMuted}" font-size="11" opacity="0.7">${T.fmt(v)}</text>`;
+          svg += `<text x="${toX(i)}" y="${toY(v)-12}" text-anchor="middle" fill="${T.textMuted}" font-size="11" opacity="0.7">${T.fmt(v, dp)}</text>`;
         });
       }
     });
@@ -216,7 +216,7 @@ const SvgCharts = {
     for (let i=0;i<=4;i++) {
       const tick=(mx/4)*i, y=toY(tick);
       svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;
-      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="12">${T.fmtTick(tick)}</text>`;
+      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="12">${T.fmtTick(tick, SvgCharts._decimalPlaces)}</text>`;
     }
     labels.forEach((l,gi) => {
       const gx = padL+gi*gW;
@@ -224,8 +224,8 @@ const SvgCharts = {
         const v=s.data[gi]||0, bH=(v/mx)*cH, bx=gx+gPad+si*(bW+bGap), by=cTop+cH-bH;
         const c = colors[si]||T.SERIES[si%T.SERIES.length];
         svg += `<rect x="${bx}" y="${by}" width="${bW}" height="${bH}" fill="${c}" rx="${Math.min(4,bW/2)}"/>`;
-        const vlVisible = !showValueLabels || showValueLabels[si] !== false;
-        if (bW>=28 && vlVisible) svg += `<text x="${bx+bW/2}" y="${by-8}" text-anchor="middle" fill="${T.textDark}" font-size="11" font-weight="600">${T.fmtTick(v)}</text>`;
+        const dp = SvgCharts._decimalPlaces;
+        if (bW>=28 && !SvgCharts._hideValueLabels) svg += `<text x="${bx+bW/2}" y="${by-8}" text-anchor="middle" fill="${T.textDark}" font-size="11" font-weight="600">${T.fmtTick(v, dp)}</text>`;
       });
       svg += `<text x="${gx+gW/2}" y="${cBot+24}" text-anchor="middle" fill="${T.textMuted}" font-size="12">${this._esc(l)}</text>`;
     });
@@ -271,7 +271,7 @@ const SvgCharts = {
       svg += `<text x="${LX}" y="${cy+bH/2+5}" font-size="13" font-weight="700" fill="${T.textBlack}">${this._esc(r.label)}</text>`;
       svg += `<rect x="${BAR_L}" y="${cy}" width="${BW}" height="${bH}" rx="8" fill="${T.track}"/>`;
       svg += `<rect x="${BAR_L}" y="${cy}" width="${fillW}" height="${bH}" rx="8" fill="${c}"/>`;
-      if (fillW>60) svg += `<text x="${BAR_L+12}" y="${cy+bH/2+5}" font-size="14" font-weight="700" fill="${T.white}">${T.fmt(r.value)}</text>`;
+      if (fillW>60 && !SvgCharts._hideValueLabels) svg += `<text x="${BAR_L+12}" y="${cy+bH/2+5}" font-size="14" font-weight="700" fill="${T.white}">${T.fmt(r.value, SvgCharts._decimalPlaces)}</text>`;
     });
     return this._wrap(title, subtitle, source, svg);
   },

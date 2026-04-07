@@ -1761,8 +1761,8 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
 .kind-tab-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 8px 12px;
+  gap: 3px;
+  padding: 6px 12px;
   background: #FFF;
   border-radius: 14px 14px 0 0;
   border-bottom: 1px solid var(--divider);
@@ -1771,55 +1771,71 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
 }
 .kind-tab-bar::-webkit-scrollbar { height: 0; }
 
+.kt-slide-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.kt-divider {
+  width: 1px; height: 18px;
+  background: var(--divider);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
 .kt-group {
   display: flex;
   align-items: center;
   gap: 2px;
   padding-right: 6px;
-  margin-right: 4px;
+  margin-right: 2px;
   border-right: 1px solid var(--divider);
 }
 .kt-group:last-child { border-right: none; margin-right: 0; padding-right: 0; }
 
-.kt-cat-label {
-  font-size: 11px;
-  padding: 0 2px;
-  flex-shrink: 0;
-  opacity: 0.6;
-}
-
 .kt-btn {
   position: relative;
-  width: 34px; height: 30px;
+  height: 28px;
+  padding: 0 8px;
   border: 1.5px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   background: none;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
   transition: all 0.12s;
   flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-weight: 600;
 }
 .kt-btn:hover {
   background: #F5F3FF;
   border-color: #E8E4FF;
+  color: var(--text-dark);
 }
 .kt-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 2px 8px rgba(108,92,231,0.25);
-  filter: grayscale(0) brightness(1.1);
+  color: #FFF;
+  box-shadow: 0 1px 6px rgba(108,92,231,0.25);
 }
-/* active 상태에서 이모지 밝게 */
-.kt-btn.active { filter: brightness(1.15); }
 
 .kt-rec {
-  position: absolute;
-  top: 2px; right: 2px;
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  background: #F0EEFF;
+  color: var(--accent);
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-left: 1px;
+  letter-spacing: 0.3px;
 }
-.kt-btn.active .kt-rec { background: #FFF; }
+.kt-btn.active .kt-rec { background: rgba(255,255,255,0.3); color: #FFF; }

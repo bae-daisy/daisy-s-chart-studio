@@ -28,18 +28,18 @@
   let projectName = '새 프로젝트';
 
   // 카테고리별 차트 유형 — 장표 상단 탭바용 (컴팩트 가로)
-  function buildKindTabBarHTML(activeKind, recommended) {
+  function buildKindTabBarHTML(activeKind, recommended, slideIdx) {
     const cats = T.KIND_CATEGORIES;
-    let html = '';
+    let html = `<span class="kt-slide-num">장표 ${slideIdx + 1}</span><span class="kt-divider"></span>`;
     Object.entries(cats).forEach(([catKey, cat]) => {
       const kinds = Object.entries(T.KINDS).filter(([k, v]) => v.category === catKey);
       if (kinds.length === 0) return;
       html += `<div class="kt-group">`;
-      html += `<span class="kt-cat-label">${cat.icon}</span>`;
       kinds.forEach(([k, v]) => {
         const isActive = activeKind === k ? ' active' : '';
         const isRec = recommended.includes(k);
-        html += `<button class="kt-btn${isActive}" data-kind="${k}" title="${v.label}">${v.icon}${isRec ? '<i class="kt-rec"></i>' : ''}</button>`;
+        const label = v.label.length > 4 ? v.label.slice(0, 4) : v.label;
+        html += `<button class="kt-btn${isActive}" data-kind="${k}" title="${v.label}">${v.icon} ${label}${isRec ? '<i class="kt-rec">추천</i>' : ''}</button>`;
       });
       html += `</div>`;
     });
@@ -833,7 +833,7 @@
     const recommended = T.RECOMMENDED[dataType] || [];
     const kindBar = document.createElement('div');
     kindBar.className = 'kind-tab-bar';
-    kindBar.innerHTML = buildKindTabBarHTML(slide.chartKind, recommended);
+    kindBar.innerHTML = buildKindTabBarHTML(slide.chartKind, recommended, slides.indexOf(slide));
     chartArea.appendChild(kindBar);
 
     // 탭바 클릭 이벤트
@@ -861,12 +861,6 @@
     const el = buildChart(slide);
     el.dataset.slideId = slide.id;
     chartArea.appendChild(el);
-
-    // 장표 번호 라벨
-    const slideNum = document.createElement('div');
-    slideNum.className = 'slide-number';
-    slideNum.textContent = '장표 ' + (slides.indexOf(slide) + 1);
-    chartArea.appendChild(slideNum);
 
     // 다운로드 + 편집 버튼 오버레이
     const actions = document.createElement('div');

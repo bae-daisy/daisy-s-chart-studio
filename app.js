@@ -862,35 +862,34 @@
     el.dataset.slideId = slide.id;
     chartArea.appendChild(el);
 
-    // 다운로드 + 편집 버튼 오버레이
-    const actions = document.createElement('div');
-    actions.className = 'slide-actions';
-    actions.innerHTML = `
-      <button class="slide-action-btn text-edit-btn" title="텍스트 수정">Aa 텍스트 수정</button>
-      <button class="slide-action-btn edit-btn" title="장표 설정">⚙️ 설정</button>
-      <button class="slide-action-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
-      <button class="slide-action-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
-      <button class="slide-action-btn del-btn" title="삭제">🗑️</button>
-    `;
+    // 액션 버튼을 탭바 오른쪽에 통합
+    const actionsHtml = `<div class="kt-actions">
+      <button class="kt-act-btn text-edit-btn" title="텍스트 수정">Aa</button>
+      <button class="kt-act-btn edit-btn" title="장표 설정">⚙️</button>
+      <button class="kt-act-btn dl-png-btn" title="PNG 다운로드">PNG</button>
+      <button class="kt-act-btn dl-svg-btn" title="SVG 다운로드">SVG</button>
+      <button class="kt-act-btn del-btn" title="삭제">🗑️</button>
+    </div>`;
+    kindBar.insertAdjacentHTML('beforeend', actionsHtml);
+
     chartArea.style.position = 'relative';
-    chartArea.appendChild(actions);
 
     wrapper.appendChild(chartArea);
 
     // 텍스트 수정 모드 토글
-    actions.querySelector('.text-edit-btn').addEventListener('click', e => {
+    kindBar.querySelector('.text-edit-btn').addEventListener('click', e => {
       e.stopPropagation();
-      toggleTextEditMode(el, chartArea, actions.querySelector('.text-edit-btn'));
+      toggleTextEditMode(el, chartArea, kindBar.querySelector('.text-edit-btn'));
     });
 
     // 편집 버튼 → 인라인 에디터 토글
-    actions.querySelector('.edit-btn').addEventListener('click', e => {
+    kindBar.querySelector('.edit-btn').addEventListener('click', e => {
       e.stopPropagation();
       e.preventDefault();
       try { toggleInlineEditor(slide, wrapper); } catch(err) { alert('에디터 오류: ' + err.message); console.error(err); }
     });
     // PNG 다운로드
-    actions.querySelector('.dl-png-btn').addEventListener('click', e => {
+    kindBar.querySelector('.dl-png-btn').addEventListener('click', e => {
       e.stopPropagation();
       const svgEl = el.querySelector('svg');
       const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
@@ -899,7 +898,7 @@
       });
     });
     // SVG 다운로드
-    actions.querySelector('.dl-svg-btn').addEventListener('click', e => {
+    kindBar.querySelector('.dl-svg-btn').addEventListener('click', e => {
       e.stopPropagation();
       const svgEl = el.querySelector('svg');
       if (!svgEl) { alert('SVG 차트만 다운로드 가능합니다.'); return; }
@@ -910,7 +909,7 @@
       });
     });
     // 장표 삭제
-    actions.querySelector('.del-btn').addEventListener('click', e => {
+    kindBar.querySelector('.del-btn').addEventListener('click', e => {
       e.stopPropagation();
       if (!confirm('이 장표를 삭제하시겠어요?')) return;
       const idx = slides.indexOf(slide);

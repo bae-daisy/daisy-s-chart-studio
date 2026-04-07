@@ -364,21 +364,6 @@ body {
   min-width: 0;
 }
 
-/* 장표 번호 라벨 */
-.slide-number {
-  position: absolute;
-  top: 12px;
-  left: 16px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: rgba(255,255,255,0.8);
-  padding: 3px 10px;
-  border-radius: 8px;
-  z-index: 5;
-  pointer-events: none;
-}
-
 /* 1200×750 고정 프레임 — 브라우저 너비에 맞춰 반응형 축소 */
 .chart-slide {
   background: var(--card-bg);
@@ -400,41 +385,36 @@ body {
   pointer-events: none;
 }
 
-/* ── 슬라이드 액션 오버레이 ── */
-.slide-actions {
-  position: absolute;
-  top: 16px; right: 16px;
-  display: flex; gap: 8px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 100;
-  pointer-events: none;
+/* ── 슬라이드 액션 (탭바 오른쪽) ── */
+.kt-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding-left: 8px;
 }
-.slide-chart-area:hover .slide-actions { opacity: 1; pointer-events: auto; }
-
-.slide-action-btn {
-  padding: 6px 14px;
-  border-radius: 10px;
-  border: none;
-  font-size: 13px;
+.kt-act-btn {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--divider);
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
-  background: rgba(255,255,255,0.95);
-  color: var(--text-dark);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  backdrop-filter: blur(8px);
-  transition: all 0.15s;
-  position: relative;
-  z-index: 101;
+  background: #FFF;
+  color: var(--text-muted);
+  transition: all 0.12s;
+  white-space: nowrap;
 }
-.slide-action-btn:hover { background: var(--accent); color: #FFF; }
+.kt-act-btn:hover { background: var(--accent); color: #FFF; border-color: var(--accent); }
 
 /* 텍스트 수정 모드 */
 .text-edit-mode .chart-slide svg { cursor: crosshair; }
-.slide-action-btn.active {
+.kt-act-btn.active {
   background: var(--accent);
   color: #FFF;
+  border-color: var(--accent);
 }
 .text-edit-banner {
   position: absolute;

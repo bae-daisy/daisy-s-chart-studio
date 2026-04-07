@@ -402,11 +402,16 @@ body {
   cursor: pointer;
   font-family: inherit;
   background: #FFF;
-  color: var(--text-muted);
+  color: var(--text-dark);
   transition: all 0.12s;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
-.st-btn:hover { background: var(--accent); color: #FFF; border-color: var(--accent); }
+.st-btn:hover { background: #F5F3FF; border-color: var(--accent); color: var(--accent); }
+.st-btn.del-btn { color: var(--text-muted); }
+.st-btn.del-btn:hover { background: #FEE; border-color: #E55; color: #E55; }
 
 /* 텍스트 수정 모드 */
 .text-edit-mode .chart-slide svg { cursor: crosshair; }

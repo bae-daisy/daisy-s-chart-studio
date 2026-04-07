@@ -1763,19 +1763,30 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border: 1.5px solid var(--divider);
+  border: 1.5px solid var(--accent);
   border-radius: 10px;
-  background: #FFF;
+  background: #F5F3FF;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--accent);
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s;
   white-space: nowrap;
 }
-.kd-trigger:hover { border-color: var(--accent); background: #F5F3FF; }
-.kd-arrow { font-size: 10px; color: var(--text-muted); margin-left: 2px; }
+.kd-trigger:hover { background: var(--accent); color: #FFF; }
+.kd-trigger:hover .kd-change { background: rgba(255,255,255,0.3); color: #FFF; }
+.kd-trigger:hover .kd-arrow { color: #FFF; }
+.kd-arrow { font-size: 10px; color: var(--accent); margin-left: 2px; }
+.kd-change {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #FFF;
+  padding: 2px 6px;
+  border-radius: 5px;
+  margin-left: 4px;
+}
 .kd-popup {
   display: none;
   position: absolute;

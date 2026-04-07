@@ -27,7 +27,26 @@
   const slides = [];
   let projectName = '새 프로젝트';
 
-  // 카테고리별 차트 유형 HTML 생성
+  // 카테고리별 차트 유형 — 장표 상단 탭바용 (컴팩트 가로)
+  function buildKindTabBarHTML(activeKind, recommended) {
+    const cats = T.KIND_CATEGORIES;
+    let html = '';
+    Object.entries(cats).forEach(([catKey, cat]) => {
+      const kinds = Object.entries(T.KINDS).filter(([k, v]) => v.category === catKey);
+      if (kinds.length === 0) return;
+      html += `<div class="kt-group">`;
+      html += `<span class="kt-cat-label">${cat.icon}</span>`;
+      kinds.forEach(([k, v]) => {
+        const isActive = activeKind === k ? ' active' : '';
+        const isRec = recommended.includes(k);
+        html += `<button class="kt-btn${isActive}" data-kind="${k}" title="${v.label}">${v.icon}${isRec ? '<i class="kt-rec"></i>' : ''}</button>`;
+      });
+      html += `</div>`;
+    });
+    return html;
+  }
+
+  // 카테고리별 차트 유형 HTML 생성 (설정 패널용 — 기존)
   function buildKindOptionsHTML(activeKind, recommended) {
     const cats = T.KIND_CATEGORIES;
     let html = '';
@@ -809,6 +828,36 @@
     const chartArea = document.createElement('div');
     chartArea.className = 'slide-chart-area';
 
+    // ── 차트 유형 탭바 (장표 상단) ──
+    const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
+    const recommended = T.RECOMMENDED[dataType] || [];
+    const kindBar = document.createElement('div');
+    kindBar.className = 'kind-tab-bar';
+    kindBar.innerHTML = buildKindTabBarHTML(slide.chartKind, recommended);
+    chartArea.appendChild(kindBar);
+
+    // 탭바 클릭 이벤트
+    kindBar.addEventListener('click', e => {
+      const btn = e.target.closest('.kt-btn');
+      if (!btn) return;
+      const newKind = btn.dataset.kind;
+      if (newKind === slide.chartKind) return;
+      slide.chartKind = newKind;
+      // 탭바 active 업데이트
+      kindBar.querySelectorAll('.kt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // 차트 리렌더
+      rerenderChart(slide, wrapper);
+      saveProject();
+      // 인라인 에디터가 열려있으면 재렌더링
+      const existingEditor = wrapper.querySelector('.inline-editor');
+      if (existingEditor) {
+        existingEditor.remove();
+        wrapper.classList.remove('editing');
+        requestAnimationFrame(() => toggleInlineEditor(slide, wrapper));
+      }
+    });
+
     const el = buildChart(slide);
     el.dataset.slideId = slide.id;
     chartArea.appendChild(el);
@@ -915,15 +964,18 @@
   function rerenderChart(slide, wrapper) {
     const chartArea = wrapper.querySelector('.slide-chart-area');
     const oldChart = chartArea.querySelector('.chart-slide');
-    const oldActions = chartArea.querySelector('.slide-actions');
-    const oldTip = chartArea.querySelector('.icon-tip');
 
     SvgCharts._filterInfo = slide.filterInfo || '';
     const newEl = buildChart(slide);
     newEl.dataset.slideId = slide.id;
 
     if (oldChart) oldChart.replaceWith(newEl);
-    // actions와 tip은 유지
+
+    // 탭바 active 동기화
+    const kindBar = chartArea.querySelector('.kind-tab-bar');
+    if (kindBar) {
+      kindBar.querySelectorAll('.kt-btn').forEach(b => b.classList.toggle('active', b.dataset.kind === slide.chartKind));
+    }
   }
 
   // ── 인라인 에디터 (오른쪽 패널) ──
@@ -1062,10 +1114,6 @@
       </div>
       <div class="ie-body">
         <div class="ie-field">
-          <label>차트 유형</label>
-          <div class="kind-grid">${kindOptions}</div>
-        </div>
-        <div class="ie-field">
           <label>타이틀</label>
           <input type="text" class="ie-input" data-key="title" value="${_h(slide.title)}">
         </div>
@@ -1198,8 +1246,6 @@
         if (url) slide.iconUrls[name] = url;
         else delete slide.iconUrls[name];
       });
-      const activeKind = panel.querySelector('.kind-btn.active');
-      if (activeKind) slide.chartKind = activeKind.dataset.kind;
       // 범위
       if (hasRange) {
         const s = Number(panel.querySelector('[data-key="rangeStart"]').value);
@@ -1227,22 +1273,6 @@
         const span = cb.parentElement.querySelector('span');
         if (span) span.style.opacity = cb.checked ? '1' : '0.4';
         liveUpdate();
-      });
-    });
-
-    // 차트 유형 버튼
-    panel.querySelectorAll('.kind-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        panel.querySelectorAll('.kind-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        slide.chartKind = btn.dataset.kind;
-        // 에디터 재렌더링 (유형별 옵션이 달라지므로)
-        panel.remove();
-        wrapper.classList.remove('editing');
-        rerenderChart(slide, wrapper);
-        saveProject();
-        // 약간의 딜레이 후 에디터 다시 열기
-        requestAnimationFrame(() => toggleInlineEditor(slide, wrapper));
       });
     });
 

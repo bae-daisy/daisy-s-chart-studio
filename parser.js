@@ -322,20 +322,66 @@ const Parser = {
     if (['churn_analysis','flow_churn','flow_retention','loyalty_compare','demographic_ranking'].includes(type)) return 'table';
 
     // unknown → 데이터 프로파일링
+    return this._profileRecommend(headers, data);
+  },
+
+  // ── 데이터 프로파일링 기반 추천 목록 (unknown 타입용) ──
+  _profileData(headers, data) {
     const _parseNum = (v) => { const s = String(v||'').replace(/,/g,'').replace(/%$/,''); return Number(s); };
     const numCols = headers.filter((_,i) => i>0 && data.some(r => !isNaN(_parseNum(r[i])))).length;
     const hasDate = data.some(r => /\d+\/\d+|\d{4}[-\.]\d{2}/.test(r[0]));
     const rowCount = data.length;
-    if (hasDate && rowCount >= 5) return 'line';
-    if (numCols >= 2 && rowCount >= 3) return 'verticalBar';
-    if (numCols === 1 && rowCount <= 6) {
-      // 합이 100% 근처면 도넛, 아니면 수평 바
-      const vals = data.map(r => _parseNum(r[1]) || 0);
-      const sum = vals.reduce((a,b) => a+b, 0);
-      if (sum > 85 && sum < 115) return 'donut';
+    const hasPct = data.some(r => r.some(c => /%$/.test(String(c||'').trim())));
+    const vals = numCols >= 1 ? data.map(r => _parseNum(r[1]) || 0) : [];
+    const sum = vals.reduce((a,b) => a+b, 0);
+    const isPctLike = sum > 85 && sum < 115;
+    return { numCols, hasDate, rowCount, hasPct, isPctLike };
+  },
+
+  _profileRecommend(headers, data) {
+    const p = this._profileData(headers, data);
+    if (p.hasDate && p.rowCount >= 5) return 'line';
+    if (p.numCols >= 2 && p.rowCount >= 3) return 'verticalBar';
+    if (p.numCols >= 2 && p.rowCount <= 2) return 'verticalBar'; // 시점 적고 시리즈 많으면 세로 바
+    if (p.numCols === 1 && p.rowCount <= 6) {
+      if (p.isPctLike) return 'donut';
       return 'horizontalBar';
     }
-    if (rowCount <= 15) return 'horizontalBar';
+    if (p.rowCount <= 15) return 'horizontalBar';
     return 'table';
+  },
+
+  // ── 데이터 프로파일링 기반 추천 차트 목록 반환 ──
+  getRecommendedKinds(type, headers, data) {
+    // 알려진 타입이면 RECOMMENDED 매핑 사용
+    if (type && type !== 'unknown' && T.RECOMMENDED[type]) {
+      return T.RECOMMENDED[type];
+    }
+    // unknown → 데이터 프로파일링으로 추천 목록 생성
+    const p = this._profileData(headers, data);
+    const rec = [];
+
+    if (p.hasDate && p.rowCount >= 3) {
+      rec.push('line', 'combo');
+      if (p.numCols >= 2) rec.push('verticalBar');
+    } else if (p.numCols >= 2 && p.rowCount >= 3) {
+      rec.push('verticalBar', 'horizontalBar');
+      if (p.rowCount >= 5) rec.push('line', 'combo');
+      if (p.numCols >= 3) rec.push('stackedBar');
+    } else if (p.numCols === 1) {
+      if (p.isPctLike) {
+        rec.push('donut', 'horizontalBar');
+      } else if (p.rowCount <= 8) {
+        rec.push('horizontalBar', 'verticalBar');
+        if (p.rowCount <= 5) rec.push('donut');
+      } else {
+        rec.push('horizontalBar');
+      }
+    }
+
+    if (p.rowCount > 15) rec.push('table');
+    if (p.hasPct && !rec.includes('donut')) rec.push('donut');
+
+    return rec.length > 0 ? rec : ['table'];
   }
 };

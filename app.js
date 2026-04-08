@@ -444,6 +444,7 @@
     let activeSheet = 0;
     let sel = null; // { r1, c1, r2, c2 } 사각형 선택
     let selectedCols = new Set(); // 열 헤더 클릭으로 개별 열 선택
+    let excludedRows = new Set(); // 행 헤더 클릭으로 개별 행 제외
     let selMode = 'drag'; // 'drag' = 사각형, 'cols' = 열 개별
     let dragging = false;
     let dragStart = null;
@@ -466,7 +467,7 @@
       for (let c = 0; c < maxC; c++) html += `<th class="ss-col-hdr" data-c="${c}">${colLabel(c)}</th>`;
       html += '</tr></thead><tbody>';
       for (let r = 0; r < maxR; r++) {
-        html += `<tr><td class="ss-row-hdr">${r + 1}</td>`;
+        html += `<tr><td class="ss-row-hdr" data-r="${r}">${r + 1}</td>`;
         for (let c = 0; c < maxC; c++) {
           const v = rows[r] && rows[r][c] != null ? rows[r][c] : '';
           const display = String(v);
@@ -503,13 +504,21 @@
     function updateSelection() {
       const cells = modal.querySelectorAll('.ss-cell');
       const colHdrs = modal.querySelectorAll('.ss-col-hdr');
-      cells.forEach(td => td.classList.remove('ss-selected', 'ss-sel-top', 'ss-sel-bottom', 'ss-sel-left', 'ss-sel-right'));
+      const rowHdrs = modal.querySelectorAll('.ss-row-hdr');
+      cells.forEach(td => td.classList.remove('ss-selected', 'ss-sel-top', 'ss-sel-bottom', 'ss-sel-left', 'ss-sel-right', 'ss-excluded'));
       colHdrs.forEach(th => th.classList.remove('ss-col-active'));
+      rowHdrs.forEach(th => th.classList.remove('ss-row-excluded'));
+
+      // 제외된 행 표시
+      excludedRows.forEach(r => {
+        cells.forEach(td => { if (Number(td.dataset.r) === r) td.classList.add('ss-excluded'); });
+        rowHdrs.forEach(th => { if (Number(th.dataset.r) === r) th.classList.add('ss-row-excluded'); });
+      });
 
       if (selMode === 'cols' && selectedCols.size > 0) {
         cells.forEach(td => {
           const c = Number(td.dataset.c);
-          if (selectedCols.has(c)) td.classList.add('ss-selected');
+          if (selectedCols.has(c) && !excludedRows.has(Number(td.dataset.r))) td.classList.add('ss-selected');
         });
         colHdrs.forEach(th => {
           const c = Number(th.dataset.c);
@@ -520,7 +529,7 @@
         const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
         cells.forEach(td => {
           const r = Number(td.dataset.r), c = Number(td.dataset.c);
-          if (r >= r1 && r <= r2 && c >= c1 && c <= c2) {
+          if (r >= r1 && r <= r2 && c >= c1 && c <= c2 && !excludedRows.has(r)) {
             td.classList.add('ss-selected');
             if (r === r1) td.classList.add('ss-sel-top');
             if (r === r2) td.classList.add('ss-sel-bottom');
@@ -568,6 +577,7 @@
       const headers = selCols.map(c => String(sd.data[r1] && sd.data[r1][c] != null ? sd.data[r1][c] : colLabel(c)));
       const data = [];
       for (let r = r1 + 1; r <= r2; r++) {
+        if (excludedRows.has(r)) continue; // 제외된 행 건너뛰기
         const row = selCols.map(c => {
           let v = sd.data[r] && sd.data[r][c] != null ? sd.data[r][c] : '';
           if (typeof v === 'string') v = v.replace(/,/g, '');
@@ -631,7 +641,7 @@
         <div class="ss-tabs">${renderTabs()}</div>
         <div class="ss-body">${renderSheet()}</div>
         <div class="ss-footer">
-          <div class="ss-hint">💡 드래그로 영역 선택 또는 열 헤더(A, B, C…)를 클릭해서 개별 열 선택</div>
+          <div class="ss-hint">💡 드래그로 영역 선택 · 열 헤더(A, B…) 클릭으로 열 선택 · 행 번호 클릭으로 행 제외</div>
         </div>
       </div>
     `;
@@ -644,6 +654,7 @@
       activeSheet = idx;
       sel = null;
       selectedCols.clear();
+      excludedRows.clear();
       selMode = 'drag';
       modal.querySelector('.ss-tabs').innerHTML = renderTabs();
       modal.querySelector('.ss-body').innerHTML = renderSheet();
@@ -655,7 +666,7 @@
       if (tab) switchSheet(Number(tab.dataset.idx));
     });
 
-    // 이벤트: 열 헤더 클릭 (개별 열 선택/해제)
+    // 이벤트: 열 헤더 클릭 (개별 열 선택/해제) + 행 헤더 클릭 (행 제외/복원)
     const ssBody = modal.querySelector('.ss-body');
     ssBody.addEventListener('click', e => {
       const colHdr = e.target.closest('.ss-col-hdr');
@@ -665,6 +676,14 @@
         sel = null;
         if (selectedCols.has(c)) selectedCols.delete(c);
         else selectedCols.add(c);
+        updateSelection();
+        return;
+      }
+      const rowHdr = e.target.closest('.ss-row-hdr');
+      if (rowHdr) {
+        const r = Number(rowHdr.dataset.r);
+        if (excludedRows.has(r)) excludedRows.delete(r);
+        else excludedRows.add(r);
         updateSelection();
         return;
       }

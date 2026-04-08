@@ -1952,3 +1952,17 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   background: var(--accent);
   color: #FFF;
 }
+
+/* 행 제외 */
+.ss-row-hdr { cursor: pointer; transition: all 0.1s; }
+.ss-row-hdr:hover { background: #FFE8E8; color: #E55; }
+.ss-row-hdr.ss-row-excluded {
+  background: #E55;
+  color: #FFF;
+  text-decoration: line-through;
+}
+.ss-cell.ss-excluded {
+  opacity: 0.2;
+  text-decoration: line-through;
+  background: #F8F8F8;
+}

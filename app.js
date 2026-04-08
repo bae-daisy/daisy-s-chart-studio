@@ -1297,26 +1297,6 @@
             <button type="button" class="btn-filter-example" title="예시 채우기" style="white-space:nowrap;padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5ff;cursor:pointer;font-size:12px;">예시</button>
           </div>
         </div>
-        ${(() => {
-          // 시리즈(열) 표시/숨김 토글 — 숫자 열이 2개 이상일 때만
-          const seriesNames = [];
-          for (let i = 1; i < allHeaders.length; i++) {
-            if (fullData.some(r => !isNaN(Number(r[i])))) seriesNames.push({ idx: i, name: allHeaders[i] });
-          }
-          if (seriesNames.length < 2) return '';
-          // colRoles 기반: 'ignore'면 숨김
-          const items = seriesNames.map(s => {
-            const hidden = slide.colRoles && slide.colRoles[s.idx] === 'ignore';
-            return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:2px 0">
-              <input type="checkbox" class="ie-series-check" data-col="${s.idx}" ${!hidden ? 'checked' : ''} style="accent-color:var(--accent);width:15px;height:15px">
-              <span style="${!hidden ? '' : 'opacity:0.4'}">${_h(s.name)}</span>
-            </label>`;
-          }).join('');
-          return `<div class="ie-field">
-            <label>📊 표시할 시리즈</label>
-            <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
-          </div>`;
-        })()}
         <div class="ie-field">
           <label>🔢 숫자 표시</label>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1437,18 +1417,6 @@
     // 이벤트 바인딩
     panel.querySelectorAll('.ie-input').forEach(inp => inp.addEventListener('input', liveUpdate));
     panel.querySelectorAll('.ie-select').forEach(sel => sel.addEventListener('change', liveUpdate));
-
-    // 시리즈 표시/숨김 토글
-    panel.querySelectorAll('.ie-series-check').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const ci = Number(cb.dataset.col);
-        if (!slide.colRoles) slide.colRoles = allHeaders.map((_, i) => i === 0 ? 'label' : 'value');
-        slide.colRoles[ci] = cb.checked ? 'value' : 'ignore';
-        const span = cb.parentElement.querySelector('span');
-        if (span) span.style.opacity = cb.checked ? '1' : '0.4';
-        liveUpdate();
-      });
-    });
 
     // 값 라벨 표시 토글
     const vlToggle = panel.querySelector('.ie-val-label-toggle');

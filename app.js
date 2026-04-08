@@ -647,7 +647,7 @@
         <div class="ss-body">${renderSheet()}</div>
         <div class="ss-footer">
           <div class="ss-hint">
-            💡 <b>셀 드래그</b>: 연속 영역 선택 &nbsp;·&nbsp; <b>열 헤더(A, B…) 클릭</b>: 떨어진 열 골라 선택 &nbsp;·&nbsp; <b>행 번호 클릭</b>: 해당 행 제외
+            💡 <b>셀 드래그</b>: 연속 영역 선택 &nbsp;·&nbsp; <b>열 헤더 클릭</b>: 열 선택 &nbsp;·&nbsp; <b>행 번호 클릭</b>: 행 제외 &nbsp;·&nbsp; <b>Shift+클릭</b>: 범위 선택
           </div>
         </div>
       </div>
@@ -673,7 +673,9 @@
       if (tab) switchSheet(Number(tab.dataset.idx));
     });
 
-    // 이벤트: 열 헤더 클릭 (개별 열 선택/해제) + 행 헤더 클릭 (행 제외/복원)
+    // 이벤트: 열 헤더 클릭 (개별/Shift 범위 선택) + 행 헤더 클릭 (제외/Shift 범위 제외)
+    let lastClickedCol = null;
+    let lastClickedRow = null;
     const ssBody = modal.querySelector('.ss-body');
     ssBody.addEventListener('click', e => {
       const colHdr = e.target.closest('.ss-col-hdr');
@@ -681,16 +683,34 @@
         const c = Number(colHdr.dataset.c);
         selMode = 'cols';
         sel = null;
-        if (selectedCols.has(c)) selectedCols.delete(c);
-        else selectedCols.add(c);
+        if (e.shiftKey && lastClickedCol != null) {
+          // Shift+클릭: 범위 선택
+          const from = Math.min(lastClickedCol, c), to = Math.max(lastClickedCol, c);
+          for (let i = from; i <= to; i++) selectedCols.add(i);
+        } else {
+          if (selectedCols.has(c)) selectedCols.delete(c);
+          else selectedCols.add(c);
+        }
+        lastClickedCol = c;
         updateSelection();
         return;
       }
       const rowHdr = e.target.closest('.ss-row-hdr');
       if (rowHdr) {
         const r = Number(rowHdr.dataset.r);
-        if (excludedRows.has(r)) excludedRows.delete(r);
-        else excludedRows.add(r);
+        if (e.shiftKey && lastClickedRow != null) {
+          // Shift+클릭: 범위 제외/복원
+          const from = Math.min(lastClickedRow, r), to = Math.max(lastClickedRow, r);
+          const shouldExclude = !excludedRows.has(r);
+          for (let i = from; i <= to; i++) {
+            if (shouldExclude) excludedRows.add(i);
+            else excludedRows.delete(i);
+          }
+        } else {
+          if (excludedRows.has(r)) excludedRows.delete(r);
+          else excludedRows.add(r);
+        }
+        lastClickedRow = r;
         updateSelection();
         return;
       }

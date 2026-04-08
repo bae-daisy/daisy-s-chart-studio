@@ -442,9 +442,11 @@
     });
 
     let activeSheet = 0;
-    let sel = null; // { r1, c1, r2, c2 } 선택 영역
+    let sel = null; // { r1, c1, r2, c2 } 사각형 선택
+    let selectedCols = new Set(); // 열 헤더 클릭으로 개별 열 선택
+    let selMode = 'drag'; // 'drag' = 사각형, 'cols' = 열 개별
     let dragging = false;
-    let dragStart = null; // { r, c }
+    let dragStart = null;
 
     function colLabel(c) {
       let s = '';
@@ -461,7 +463,7 @@
       const maxC = Math.min(maxCols, 50);
 
       let html = '<table class="ss-table"><thead><tr><th class="ss-corner"></th>';
-      for (let c = 0; c < maxC; c++) html += `<th class="ss-col-hdr">${colLabel(c)}</th>`;
+      for (let c = 0; c < maxC; c++) html += `<th class="ss-col-hdr" data-c="${c}">${colLabel(c)}</th>`;
       html += '</tr></thead><tbody>';
       for (let r = 0; r < maxR; r++) {
         html += `<tr><td class="ss-row-hdr">${r + 1}</td>`;
@@ -485,6 +487,12 @@
     }
 
     function getSelectionInfo() {
+      if (selMode === 'cols' && selectedCols.size > 0) {
+        const sd = sheets[activeSheet];
+        const maxR = Math.min(sd.data.length, 200);
+        const cols = [...selectedCols].sort((a,b) => a-b);
+        return `${cols.map(c => colLabel(c)).join(', ')} 열 선택 (${maxR}행 × ${cols.length}열)`;
+      }
       if (!sel) return '';
       const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
       const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
@@ -494,51 +502,77 @@
 
     function updateSelection() {
       const cells = modal.querySelectorAll('.ss-cell');
+      const colHdrs = modal.querySelectorAll('.ss-col-hdr');
       cells.forEach(td => td.classList.remove('ss-selected', 'ss-sel-top', 'ss-sel-bottom', 'ss-sel-left', 'ss-sel-right'));
-      if (!sel) { updateSelInfo(); return; }
-      const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
-      const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
-      cells.forEach(td => {
-        const r = Number(td.dataset.r), c = Number(td.dataset.c);
-        if (r >= r1 && r <= r2 && c >= c1 && c <= c2) {
-          td.classList.add('ss-selected');
-          if (r === r1) td.classList.add('ss-sel-top');
-          if (r === r2) td.classList.add('ss-sel-bottom');
-          if (c === c1) td.classList.add('ss-sel-left');
-          if (c === c2) td.classList.add('ss-sel-right');
-        }
-      });
+      colHdrs.forEach(th => th.classList.remove('ss-col-active'));
+
+      if (selMode === 'cols' && selectedCols.size > 0) {
+        cells.forEach(td => {
+          const c = Number(td.dataset.c);
+          if (selectedCols.has(c)) td.classList.add('ss-selected');
+        });
+        colHdrs.forEach(th => {
+          const c = Number(th.dataset.c);
+          if (selectedCols.has(c)) th.classList.add('ss-col-active');
+        });
+      } else if (sel) {
+        const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
+        const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
+        cells.forEach(td => {
+          const r = Number(td.dataset.r), c = Number(td.dataset.c);
+          if (r >= r1 && r <= r2 && c >= c1 && c <= c2) {
+            td.classList.add('ss-selected');
+            if (r === r1) td.classList.add('ss-sel-top');
+            if (r === r2) td.classList.add('ss-sel-bottom');
+            if (c === c1) td.classList.add('ss-sel-left');
+            if (c === c2) td.classList.add('ss-sel-right');
+          }
+        });
+      }
       updateSelInfo();
+    }
+
+    function hasSelection() {
+      return (selMode === 'cols' && selectedCols.size > 0) || sel != null;
     }
 
     function updateSelInfo() {
       const info = modal.querySelector('.ss-sel-info');
       const btn = modal.querySelector('.ss-create-btn');
-      if (info) info.textContent = sel ? getSelectionInfo() : '영역을 드래그해서 선택하세요';
-      if (btn) btn.disabled = !sel;
+      if (info) info.textContent = hasSelection() ? getSelectionInfo() : '영역을 드래그하거나 열 헤더를 클릭하세요';
+      if (btn) btn.disabled = !hasSelection();
     }
 
     function buildFromSelection() {
-      if (!sel) return;
       const sd = sheets[activeSheet];
-      const r1 = Math.min(sel.r1, sel.r2), r2 = Math.max(sel.r1, sel.r2);
-      const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
-      if (r2 - r1 < 1 || c2 - c1 < 0) { showToast('⚠️ 최소 2행 이상 선택해주세요', true); return; }
+      let selCols, r1, r2;
 
-      // 첫 행 = 헤더, 나머지 = 데이터
-      const headers = [];
-      for (let c = c1; c <= c2; c++) {
-        headers.push(String(sd.data[r1] && sd.data[r1][c] != null ? sd.data[r1][c] : colLabel(c)));
+      if (selMode === 'cols' && selectedCols.size > 0) {
+        // 열 개별 선택 모드: 전체 행, 선택된 열만
+        selCols = [...selectedCols].sort((a,b) => a-b);
+        r1 = 0;
+        r2 = Math.min(sd.data.length, 200) - 1;
+      } else if (sel) {
+        // 사각형 드래그 모드
+        r1 = Math.min(sel.r1, sel.r2);
+        r2 = Math.max(sel.r1, sel.r2);
+        const c1 = Math.min(sel.c1, sel.c2), c2 = Math.max(sel.c1, sel.c2);
+        selCols = [];
+        for (let c = c1; c <= c2; c++) selCols.push(c);
+      } else {
+        return;
       }
+
+      if (r2 - r1 < 1 || selCols.length < 1) { showToast('⚠️ 최소 2행, 1열 이상 선택해주세요', true); return; }
+
+      const headers = selCols.map(c => String(sd.data[r1] && sd.data[r1][c] != null ? sd.data[r1][c] : colLabel(c)));
       const data = [];
       for (let r = r1 + 1; r <= r2; r++) {
-        const row = [];
-        for (let c = c1; c <= c2; c++) {
+        const row = selCols.map(c => {
           let v = sd.data[r] && sd.data[r][c] != null ? sd.data[r][c] : '';
-          // 숫자 쉼표 제거
           if (typeof v === 'string') v = v.replace(/,/g, '');
-          row.push(String(v));
-        }
+          return String(v);
+        });
         if (row.some(v => v !== '')) data.push(row);
       }
       if (data.length === 0) { showToast('⚠️ 선택 영역에 데이터가 없어요', true); return; }
@@ -597,7 +631,7 @@
         <div class="ss-tabs">${renderTabs()}</div>
         <div class="ss-body">${renderSheet()}</div>
         <div class="ss-footer">
-          <div class="ss-hint">💡 첫 행은 헤더(열 이름), 첫 열은 라벨(행 이름)로 사용돼요</div>
+          <div class="ss-hint">💡 드래그로 영역 선택 또는 열 헤더(A, B, C…)를 클릭해서 개별 열 선택</div>
         </div>
       </div>
     `;
@@ -609,6 +643,8 @@
     function switchSheet(idx) {
       activeSheet = idx;
       sel = null;
+      selectedCols.clear();
+      selMode = 'drag';
       modal.querySelector('.ss-tabs').innerHTML = renderTabs();
       modal.querySelector('.ss-body').innerHTML = renderSheet();
       updateSelection();
@@ -619,13 +655,29 @@
       if (tab) switchSheet(Number(tab.dataset.idx));
     });
 
-    // 이벤트: 셀 드래그 선택
+    // 이벤트: 열 헤더 클릭 (개별 열 선택/해제)
     const ssBody = modal.querySelector('.ss-body');
+    ssBody.addEventListener('click', e => {
+      const colHdr = e.target.closest('.ss-col-hdr');
+      if (colHdr) {
+        const c = Number(colHdr.dataset.c);
+        selMode = 'cols';
+        sel = null;
+        if (selectedCols.has(c)) selectedCols.delete(c);
+        else selectedCols.add(c);
+        updateSelection();
+        return;
+      }
+    });
+
+    // 이벤트: 셀 드래그 선택 (사각형)
     ssBody.addEventListener('mousedown', e => {
       const td = e.target.closest('.ss-cell');
       if (!td) return;
       e.preventDefault();
       dragging = true;
+      selMode = 'drag';
+      selectedCols.clear();
       const r = Number(td.dataset.r), c = Number(td.dataset.c);
       dragStart = { r, c };
       sel = { r1: r, c1: c, r2: r, c2: c };

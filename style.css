@@ -1944,3 +1944,11 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   color: #FFF;
   border-style: solid;
 }
+
+/* 열 헤더 선택 */
+.ss-col-hdr { cursor: pointer; transition: all 0.1s; }
+.ss-col-hdr:hover { background: #E8E4FF; color: var(--accent); }
+.ss-col-hdr.ss-col-active {
+  background: var(--accent);
+  color: #FFF;
+}

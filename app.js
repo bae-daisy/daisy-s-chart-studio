@@ -435,7 +435,7 @@
     modal.className = 'ss-modal';
 
     // 시트 데이터 준비
-    const sheets = wb.SheetNames.map(name => {
+    const sheets = wb._fakeSheets || wb.SheetNames.map(name => {
       const sheet = wb.Sheets[name];
       const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
       return { name, data: json };
@@ -1202,16 +1202,10 @@
         <details class="ie-advanced">
           <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
           <div class="ie-advanced-body">
-        ${slide._wb ? `<div class="ie-field">
-          <button class="ie-reselect-btn">📊 데이터 영역 다시 선택</button>
-        </div>` : ''}
         <div class="ie-field">
-          <div class="ie-preview-header-row">
-            <label>📋 데이터 미리보기</label>
-            <button class="ie-expand-btn" title="전체 데이터 보기">🔍 확대</button>
-          </div>
-          ${previewHTML}
+          <button class="ie-reselect-btn">📊 데이터 영역 다시 선택</button>
         </div>
+        <div class="ie-field">
         ${slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare' ? `
         <div class="ie-field">
           <label>앱 아이콘 URL</label>
@@ -1348,7 +1342,18 @@
       reselectBtn.addEventListener('click', () => {
         panel.remove();
         wrapper.classList.remove('editing');
-        openSpreadsheetViewer(slide._wb, slide._wbName, slide);
+        if (slide._wb) {
+          openSpreadsheetViewer(slide._wb, slide._wbName, slide);
+        } else {
+          // CSV 등 원본 워크북이 없는 경우: 현재 데이터로 가짜 워크북 생성
+          const fd = slide.fullParsed || slide.parsed;
+          const fakeSheetData = [fd.headers, ...fd.data];
+          const fakeWb = { SheetNames: ['데이터'], Sheets: {} };
+          // openSpreadsheetViewer가 받는 형태로 변환
+          const sheets = [{ name: '데이터', data: fakeSheetData }];
+          // 직접 뷰어 열기
+          openSpreadsheetViewer({ _fakeSheets: sheets }, slide.title || '데이터', slide);
+        }
       });
     }
 

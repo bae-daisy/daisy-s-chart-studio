@@ -82,26 +82,30 @@ const T = {
 
   fmt(n, dp) {
     if (dp != null) {
+      if (n >= 1e12) return (n/1e12).toFixed(dp)+'조';
       if (n >= 1e8) return (n/1e8).toFixed(dp)+'억';
       if (n >= 1e4) return (n/1e4).toFixed(dp)+'만';
       if (n >= 1e3) return n.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:dp});
       return Number(n).toFixed(dp);
     }
-    if (n >= 1e8) return (n/1e8).toFixed(1)+'억';
+    if (n >= 1e12) return (n/1e12).toFixed(1)+'조';
+    if (n >= 1e8) return (n/1e8).toFixed(0)+'억';
     if (n >= 1e4) return (n/1e4).toFixed(0)+'만';
     if (n >= 1e3) return n.toLocaleString();
     return String(Math.round(n));
   },
   fmtTick(v, dp) {
     if (dp != null) {
-      if (v >= 1e7) return (v/1e4).toFixed(dp)+'만';
+      if (v >= 1e12) return (v/1e12).toFixed(dp)+'조';
+      if (v >= 1e8) return (v/1e8).toFixed(dp)+'억';
       if (v >= 1e4) return (v/1e4).toFixed(dp)+'만';
-      if (v >= 1e3) return (v/1e3).toFixed(dp)+'천';
       return Number(v).toFixed(dp);
     }
+    if (v >= 1e12) return (v/1e12).toFixed(1)+'조';
+    if (v >= 1e8) return (v/1e8).toFixed(0)+'억';
     if (v >= 1e7) return (v/1e4).toFixed(0)+'만';
     if (v >= 1e4) return (v/1e4).toFixed(1)+'만';
-    if (v >= 1e3) return (v/1e3).toFixed(0)+'천';
+    if (v >= 1e3) return v.toLocaleString();
     return v.toFixed(0);
   },
   isLight(hex) {

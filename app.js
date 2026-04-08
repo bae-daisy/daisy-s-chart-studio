@@ -607,7 +607,7 @@
         // 기존 슬라이드 데이터 업데이트
         existingSlide.parsed = parsed;
         existingSlide.fullParsed = parsed;
-        existingSlide.chartKind = chartKind;
+        // 차트 유형은 기존 설정 유지 (사용자가 바꾼 걸 존중)
         existingSlide.colRoles = null;
         existingSlide.rowRoles = null;
         existingSlide.rangeStart = 0;

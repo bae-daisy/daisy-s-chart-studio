@@ -942,6 +942,7 @@
           <div class="kd-popup">${dd.popupHtml}</div>
         </div>
         <div class="st-actions">
+          <button class="st-btn reselect-btn" title="데이터 영역 다시 선택">📊 셀 선택</button>
           <button class="st-btn text-edit-btn" title="텍스트 수정">✏️ 텍스트 수정</button>
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
@@ -999,6 +1000,19 @@
     toolbar.addEventListener('click', e => {
       const btn = e.target.closest('button');
       if (!btn) return;
+
+      // 데이터 영역 다시 선택
+      if (btn.classList.contains('reselect-btn')) {
+        e.stopPropagation();
+        if (slide._wb) {
+          openSpreadsheetViewer(slide._wb, slide._wbName, slide);
+        } else {
+          const fd = slide.fullParsed || slide.parsed;
+          const fakeSheetData = [fd.headers, ...fd.data];
+          openSpreadsheetViewer({ _fakeSheets: [{ name: '데이터', data: fakeSheetData }] }, slide.title || '데이터', slide);
+        }
+        return;
+      }
 
       // 텍스트 수정
       if (btn.classList.contains('text-edit-btn')) {
@@ -1274,9 +1288,6 @@
           <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
           <div class="ie-advanced-body">
         <div class="ie-field">
-          <button class="ie-reselect-btn">📊 데이터 영역 다시 선택</button>
-        </div>
-        <div class="ie-field">
         ${slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare' ? `
         <div class="ie-field">
           <label>앱 아이콘 URL</label>
@@ -1407,26 +1418,6 @@
       });
     }
 
-    // 데이터 영역 다시 선택
-    const reselectBtn = panel.querySelector('.ie-reselect-btn');
-    if (reselectBtn) {
-      reselectBtn.addEventListener('click', () => {
-        panel.remove();
-        wrapper.classList.remove('editing');
-        if (slide._wb) {
-          openSpreadsheetViewer(slide._wb, slide._wbName, slide);
-        } else {
-          // CSV 등 원본 워크북이 없는 경우: 현재 데이터로 가짜 워크북 생성
-          const fd = slide.fullParsed || slide.parsed;
-          const fakeSheetData = [fd.headers, ...fd.data];
-          const fakeWb = { SheetNames: ['데이터'], Sheets: {} };
-          // openSpreadsheetViewer가 받는 형태로 변환
-          const sheets = [{ name: '데이터', data: fakeSheetData }];
-          // 직접 뷰어 열기
-          openSpreadsheetViewer({ _fakeSheets: sheets }, slide.title || '데이터', slide);
-        }
-      });
-    }
 
     // 행/열 바꾸기
     const transposeBtn = panel.querySelector('.ie-transpose');

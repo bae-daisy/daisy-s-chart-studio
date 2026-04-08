@@ -20,8 +20,8 @@ const T = {
   chartTop(sub) { return sub ? 160 : 130; },
   chartBottom() { return 600; },
 
-  SERIES: ['#6C5CE7','#8B7CF6','#A29BFE','#B8B0FF','#C4B5FD','#D4CAFE','#DDD6FE','#EDE9FE'],
-  DONUT: ['#2D2B7F','#3B3A9E','#4F46E5','#6C5CE7','#8B7CF6','#A29BFE','#C4B5FD','#DDD6FE'],
+  SERIES: ['#6C5CE7','#00B894','#E17055','#0984E3','#FDCB6E','#E84393','#00CEC9','#D63031','#6C5CE7','#2D3436','#55EFC4','#A29BFE','#FAB1A0','#74B9FF','#FFEAA7','#FD79A8','#81ECEC','#FF7675'],
+  DONUT: ['#6C5CE7','#00B894','#E17055','#0984E3','#FDCB6E','#E84393','#00CEC9','#D63031','#2D3436','#55EFC4','#A29BFE','#FAB1A0','#74B9FF','#FFEAA7','#FD79A8','#81ECEC'],
 
   KINDS: {
     line:          { label: '라인 차트',   icon: '📈', category: 'trend' },

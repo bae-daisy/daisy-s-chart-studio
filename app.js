@@ -639,6 +639,7 @@
             <span class="ss-sel-info">차트에 넣을 영역을 선택하세요</span>
           </div>
           <div class="ss-header-right">
+            <button class="ss-transpose-btn" title="행과 열을 바꿉니다">🔄 행/열 바꾸기</button>
             <button class="ss-create-btn" disabled>차트 만들기 →</button>
             <button class="ss-close">✕</button>
           </div>
@@ -741,6 +742,28 @@
 
     // 이벤트: 차트 만들기
     modal.querySelector('.ss-create-btn').addEventListener('click', buildFromSelection);
+
+    // 이벤트: 행/열 바꾸기
+    modal.querySelector('.ss-transpose-btn').addEventListener('click', () => {
+      const sd = sheets[activeSheet];
+      const rows = sd.data;
+      if (!rows || rows.length === 0) return;
+      const maxR = rows.length, maxC = Math.max(...rows.map(r => r.length), 0);
+      const transposed = [];
+      for (let c = 0; c < maxC; c++) {
+        const newRow = [];
+        for (let r = 0; r < maxR; r++) {
+          newRow.push(rows[r] && rows[r][c] != null ? rows[r][c] : '');
+        }
+        transposed.push(newRow);
+      }
+      sd.data = transposed;
+      sel = null;
+      selectedCols.clear();
+      excludedRows.clear();
+      modal.querySelector('.ss-body').innerHTML = renderSheet();
+      updateSelection();
+    });
 
     // 이벤트: 닫기
     const closeModal = () => {

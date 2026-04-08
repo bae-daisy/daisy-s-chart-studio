@@ -1966,3 +1966,19 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   text-decoration: line-through;
   background: #F8F8F8;
 }
+
+/* 행/열 바꾸기 버튼 */
+.ss-transpose-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--divider);
+  background: #FFF;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dark);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.ss-transpose-btn:hover { border-color: var(--accent); background: #F5F3FF; color: var(--accent); }

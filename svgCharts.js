@@ -154,10 +154,11 @@ const SvgCharts = {
     const xStep = labels.length>1 ? cW/(labels.length-1) : cW;
     const toX = i => padL+i*xStep, toY = v => cTop+cH-((v-yMin)/yR)*cH;
     let svg = '';
+    const useMan = yMax >= 1e4;
     for (let i=0;i<=4;i++) {
       const tick = yMin+(yR/4)*i, y = toY(tick);
       svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;
-      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="13">${T.fmtTick(tick, SvgCharts._decimalPlaces)}</text>`;
+      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="13">${T.fmtTick(tick, SvgCharts._decimalPlaces, useMan)}</text>`;
     }
     const skip = labels.length>15 ? Math.ceil(labels.length/10) : 1;
     labels.forEach((l,i) => {
@@ -213,10 +214,11 @@ const SvgCharts = {
     const bW = Math.max(6,(bArea-bGap*(series.length-1))/series.length);
     const toY = v => cTop+cH-(v/mx)*cH;
     let svg = '';
+    const useMan = mx >= 1e4;
     for (let i=0;i<=4;i++) {
       const tick=(mx/4)*i, y=toY(tick);
       svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;
-      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="12">${T.fmtTick(tick, SvgCharts._decimalPlaces)}</text>`;
+      svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="12">${T.fmtTick(tick, SvgCharts._decimalPlaces, useMan)}</text>`;
     }
     labels.forEach((l,gi) => {
       const gx = padL+gi*gW;
@@ -225,7 +227,7 @@ const SvgCharts = {
         const c = colors[si]||T.SERIES[si%T.SERIES.length];
         svg += `<rect x="${bx}" y="${by}" width="${bW}" height="${bH}" fill="${c}" rx="${Math.min(4,bW/2)}"/>`;
         const dp = SvgCharts._decimalPlaces;
-        if (bW>=28 && !SvgCharts._hideValueLabels) svg += `<text x="${bx+bW/2}" y="${by-8}" text-anchor="middle" fill="${T.textDark}" font-size="11" font-weight="600">${T.fmtTick(v, dp)}</text>`;
+        if (bW>=28 && !SvgCharts._hideValueLabels) svg += `<text x="${bx+bW/2}" y="${by-8}" text-anchor="middle" fill="${T.textDark}" font-size="11" font-weight="600">${T.fmtTick(v, dp, useMan)}</text>`;
       });
       svg += `<text x="${gx+gW/2}" y="${cBot+24}" text-anchor="middle" fill="${T.textMuted}" font-size="12">${this._esc(l)}</text>`;
     });
@@ -290,14 +292,15 @@ const SvgCharts = {
       const is2 = this._polar(CX,CY,IR,cum), ie = this._polar(CX,CY,IR,start);
       const large = angle>180?1:0, c = T.DONUT[i%T.DONUT.length];
       svg += `<path d="M ${s.x} ${s.y} A ${R} ${R} 0 ${large} 1 ${e.x} ${e.y} L ${is2.x} ${is2.y} A ${IR} ${IR} 0 ${large} 0 ${ie.x} ${ie.y} Z" fill="${c}"/>`;
-      if (angle>18) { const mp=this._polar(CX,CY,(R+IR)/2,mid); svg+=`<text x="${mp.x}" y="${mp.y+5}" text-anchor="middle" fill="#FFF" font-size="${angle>50?14:12}" font-weight="700">${(seg.value/total*100).toFixed(1)}%</text>`; }
+      if (angle>18 && !SvgCharts._hideValueLabels) { const dp=SvgCharts._decimalPlaces!=null?SvgCharts._decimalPlaces:1; const mp=this._polar(CX,CY,(R+IR)/2,mid); svg+=`<text x="${mp.x}" y="${mp.y+5}" text-anchor="middle" fill="#FFF" font-size="${angle>50?14:12}" font-weight="700">${(seg.value/total*100).toFixed(dp)}%</text>`; }
     });
     const legL = CX+R+60, legTop = CY-segments.length*22;
     segments.forEach((seg,i) => {
       const y = legTop+i*44;
+      const dp=SvgCharts._decimalPlaces!=null?SvgCharts._decimalPlaces:1;
       svg += `<circle cx="${legL+8}" cy="${y}" r="8" fill="${T.DONUT[i%T.DONUT.length]}"/>`;
       svg += `<text x="${legL+28}" y="${y+5}" font-size="18" fill="${T.textBlack}">${this._esc(seg.label)}</text>`;
-      svg += `<text x="${legL+220}" y="${y+5}" font-size="22" font-weight="700" fill="${T.DONUT[i%T.DONUT.length]}">${(seg.value/total*100).toFixed(1)}%</text>`;
+      svg += `<text x="${legL+220}" y="${y+5}" font-size="22" font-weight="700" fill="${T.DONUT[i%T.DONUT.length]}">${(seg.value/total*100).toFixed(dp)}%</text>`;
     });
     return this._wrap(title, subtitle, source, svg);
   },
@@ -313,7 +316,8 @@ const SvgCharts = {
     const xStep=labels.length>1?cW/labels.length:cW, bW=Math.max(6,xStep*0.5);
     const toBarY=v=>cTop+cH-(v/bMx)*cH, toLineY=v=>cTop+cH-((v-lYMin)/lYR)*cH, toX=i=>padL+i*xStep+xStep/2;
     let svg='';
-    for(let i=0;i<=4;i++){const tick=(bMx/4)*i,y=toBarY(tick);svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;svg+=`<text x="${padL-10}" y="${y+4}" text-anchor="end" fill="${barColor}" font-size="11">${T.fmtTick(tick)}</text>`;}
+    const useManBar=bMx>=1e4;
+    for(let i=0;i<=4;i++){const tick=(bMx/4)*i,y=toBarY(tick);svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;svg+=`<text x="${padL-10}" y="${y+4}" text-anchor="end" fill="${barColor}" font-size="11">${T.fmtTick(tick,null,useManBar)}</text>`;}
     for(let i=0;i<=4;i++){const tick=lYMin+(lYR/4)*i,y=toLineY(tick);svg+=`<text x="${W-padR+10}" y="${y+4}" text-anchor="start" fill="${lineColor}" font-size="11">${tick.toFixed(1)}</text>`;}
     const xSkip=labels.length>15?Math.ceil(labels.length/8):1;
     labels.forEach((l,i)=>{if(i%xSkip!==0&&i!==labels.length-1)return;svg+=`<text x="${toX(i)}" y="${cBot+22}" text-anchor="middle" fill="${T.textMuted}" font-size="10">${this._esc(l)}</text>`;});
@@ -502,7 +506,7 @@ const SvgCharts = {
       const v = isPct ? i * 20 : (maxTotal / 5) * i;
       const y = cTop + cH - (v / (isPct ? 100 : maxTotal)) * cH;
       svg += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="${T.divider}"/>`;
-      svg += `<text x="${padL - 10}" y="${y + 4}" text-anchor="end" fill="${T.textMuted}" font-size="12">${isPct ? v + '%' : T.fmtTick(v)}</text>`;
+      svg += `<text x="${padL - 10}" y="${y + 4}" text-anchor="end" fill="${T.textMuted}" font-size="12">${isPct ? v + '%' : T.fmtTick(v, null, maxTotal >= 1e4)}</text>`;
     }
 
     // 막대
@@ -518,8 +522,9 @@ const SvgCharts = {
         const c = colors[si % colors.length] || T.SERIES[si % T.SERIES.length];
         svg += `<rect x="${gx + gPad}" y="${y}" width="${bW}" height="${segH}" fill="${c}" rx="0"/>`;
         // 값 라벨 (충분히 크면)
-        if (segH > 18) {
-          svg += `<text x="${gx + gPad + bW/2}" y="${y + segH/2 + 4}" text-anchor="middle" fill="#FFF" font-size="${Math.min(13, segH * 0.5)}" font-weight="600">${isPct ? v.toFixed(1) + '%' : T.fmt(v)}</text>`;
+        if (segH > 18 && !SvgCharts._hideValueLabels) {
+          const dp = SvgCharts._decimalPlaces;
+          svg += `<text x="${gx + gPad + bW/2}" y="${y + segH/2 + 4}" text-anchor="middle" fill="#FFF" font-size="${Math.min(13, segH * 0.5)}" font-weight="600">${isPct ? v.toFixed(dp!=null?dp:1) + '%' : T.fmt(v, dp)}</text>`;
         }
         cumY += segH;
       });
@@ -895,7 +900,8 @@ const SvgCharts = {
               bg = '#F5F3FF';
               tc = T.textDark;
             }
-            const label = isPct ? v.toFixed(1) + '%' : T.fmt(v);
+            const dp = SvgCharts._decimalPlaces;
+            const label = isPct ? v.toFixed(dp!=null?dp:1) + '%' : T.fmt(v, dp);
             svg += `<rect x="${x}" y="${y}" width="${w}" height="${rowH}" fill="${bg}" stroke="${T.divider}" stroke-width="0.5"/>`;
             svg += `<text x="${x + w/2}" y="${y + rowH/2 + fs*0.35}" text-anchor="middle" font-size="${fs}" font-weight="500" fill="${tc}">${label}</text>`;
           }
@@ -942,7 +948,7 @@ const SvgCharts = {
         const x = getColX(ci), w = getColW(ci);
         const isNum = ci > 0 && !isNaN(Number(c));
         svg += `<rect x="${x}" y="${y}" width="${w}" height="${rowH}" fill="${bg}" stroke="${T.divider}" stroke-width="0.5"/>`;
-        svg += `<text x="${x + w/2}" y="${y + rowH/2 + fs*0.35}" text-anchor="middle" font-size="${ci===0?firstFs:fs}" font-weight="${ci===0?'600':'400'}" fill="${T.textDark}">${isNum ? T.fmt(Number(c)) : this._esc(c)}</text>`;
+        svg += `<text x="${x + w/2}" y="${y + rowH/2 + fs*0.35}" text-anchor="middle" font-size="${ci===0?firstFs:fs}" font-weight="${ci===0?'600':'400'}" fill="${T.textDark}">${isNum ? T.fmt(Number(c), SvgCharts._decimalPlaces) : this._esc(c)}</text>`;
       });
     });
     return this._wrap(title, subtitle, source, svg);

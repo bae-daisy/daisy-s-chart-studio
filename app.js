@@ -614,6 +614,7 @@
         existingSlide.rangeEnd = parsed.data.length - 1;
         existingSlide._wb = wb;
         existingSlide._wbName = fileName;
+        existingSlide._lastSel = { selMode, sel, selectedCols: [...selectedCols], excludedRows: [...excludedRows], activeSheet };
         const wrapper = container.querySelector(`[data-slide-id="${existingSlide.id}"]`);
         if (wrapper) {
           rerenderChart(existingSlide, wrapper);
@@ -625,6 +626,7 @@
       } else {
         parsed._wb = wb;
         parsed._wbName = fileName;
+        parsed._lastSel = { selMode, sel, selectedCols: [...selectedCols], excludedRows: [...excludedRows], activeSheet };
         addSlide(parsed);
       }
     }
@@ -656,6 +658,21 @@
 
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add('open'));
+
+    // 이전 선택 복원
+    if (existingSlide && existingSlide._lastSel) {
+      const ls = existingSlide._lastSel;
+      if (ls.activeSheet != null && ls.activeSheet < sheets.length) {
+        activeSheet = ls.activeSheet;
+        modal.querySelector('.ss-tabs').innerHTML = renderTabs();
+        modal.querySelector('.ss-body').innerHTML = renderSheet();
+      }
+      selMode = ls.selMode || 'drag';
+      sel = ls.sel || null;
+      if (ls.selectedCols) ls.selectedCols.forEach(c => selectedCols.add(c));
+      if (ls.excludedRows) ls.excludedRows.forEach(r => excludedRows.add(r));
+      updateSelection();
+    }
 
     // 이벤트: 시트 탭 + 셀 드래그 (이벤트 위임)
     function switchSheet(idx) {
@@ -810,6 +827,7 @@
       showValueLabels: null,
       _wb: parsed._wb || null,
       _wbName: parsed._wbName || '',
+      _lastSel: parsed._lastSel || null,
     };
     slides.push(slide);
     renderSlide(slide);

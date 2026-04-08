@@ -1877,3 +1877,70 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
 .ie-advanced[open] .ie-advanced-toggle::after { transform: rotate(90deg); }
 .ie-advanced-toggle:hover { color: var(--accent); background: #F5F3FF; }
 .ie-advanced-body { padding: 8px 14px 14px; }
+
+/* ── 빈 차트 도움말 카드 ── */
+.empty-chart-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  padding: 40px;
+  text-align: center;
+  gap: 12px;
+}
+.ecc-icon { font-size: 48px; opacity: 0.4; }
+.ecc-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.ecc-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.6;
+}
+.ecc-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ecc-btn {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1.5px solid var(--divider);
+  background: #FFF;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-dark);
+  transition: all 0.15s;
+}
+.ecc-btn:hover {
+  border-color: var(--accent);
+  background: #F5F3FF;
+  color: var(--accent);
+}
+
+/* ── 데이터 영역 다시 선택 버튼 ── */
+.ie-reselect-btn {
+  width: 100%;
+  padding: 12px 0;
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  background: #F5F3FF;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.ie-reselect-btn:hover {
+  background: var(--accent);
+  color: #FFF;
+  border-style: solid;
+}

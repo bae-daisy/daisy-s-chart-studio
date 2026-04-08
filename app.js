@@ -260,6 +260,7 @@
         slides: slides
       };
       localStorage.setItem('cs-projects', JSON.stringify(projects));
+      localStorage.setItem('cs-last-project', id);
     } catch(e) { /* 용량 초과 등 무시 */ }
   }
 
@@ -280,7 +281,7 @@
       results.style.display = '';
       updateProjectHeader();
       return true;
-    } catch(e) { return false; }
+    } catch(e) { console.error('loadProject error:', e); return false; }
   }
 
   // 저장된 프로젝트 목록 표시
@@ -374,6 +375,7 @@
     slides.length = 0;
     projectName = '새 프로젝트';
     currentProjectId = null;
+    localStorage.removeItem('cs-last-project');
     container.innerHTML = '';
     results.style.display = 'none';
     onboarding.style.display = '';
@@ -424,7 +426,7 @@
   const MAX_ROWS = 15; // 1200×750에 깔끔하게 들어가는 최대 행 수
 
   // ── 스프레드시트 뷰어 (엑셀 드래그 선택) ──
-  function openSpreadsheetViewer(wb, fileName) {
+  function openSpreadsheetViewer(wb, fileName, existingSlide) {
     const old = document.getElementById('spreadsheetModal');
     if (old) old.remove();
 
@@ -551,7 +553,31 @@
         data
       };
       modal.remove();
-      addSlide(parsed);
+
+      if (existingSlide) {
+        // 기존 슬라이드 데이터 업데이트
+        existingSlide.parsed = parsed;
+        existingSlide.fullParsed = parsed;
+        existingSlide.chartKind = chartKind;
+        existingSlide.colRoles = null;
+        existingSlide.rowRoles = null;
+        existingSlide.rangeStart = 0;
+        existingSlide.rangeEnd = parsed.data.length - 1;
+        existingSlide._wb = wb;
+        existingSlide._wbName = fileName;
+        const wrapper = container.querySelector(`[data-slide-id="${existingSlide.id}"]`);
+        if (wrapper) {
+          rerenderChart(existingSlide, wrapper);
+          // 에디터가 열려있으면 재렌더링
+          const editor = wrapper.querySelector('.inline-editor');
+          if (editor) { editor.remove(); wrapper.classList.remove('editing'); requestAnimationFrame(() => toggleInlineEditor(existingSlide, wrapper)); }
+        }
+        saveProject();
+      } else {
+        parsed._wb = wb;
+        parsed._wbName = fileName;
+        addSlide(parsed);
+      }
     }
 
     // 모달 HTML
@@ -657,10 +683,12 @@
       iconUrls: {},
       visibleCols: null,
       bubbleGroups: null,
-      transposed: false, // true면 행/열 전환
+      transposed: false,
       rangeStart: startIdx,
       rangeEnd: endIdx,
-      showValueLabels: null, // null = 전체 표시, 배열이면 시리즈 인덱스별 on/off
+      showValueLabels: null,
+      _wb: parsed._wb || null,
+      _wbName: parsed._wbName || '',
     };
     slides.push(slide);
     renderSlide(slide);
@@ -1023,7 +1051,7 @@
     const allHeaders = slide.parsed.headers;
 
     const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
-    const recommended = T.RECOMMENDED[dataType] || [];
+    const recommended = Parser.getRecommendedKinds(dataType, slide.parsed?.headers || [], slide.parsed?.data || []);
     const kindOptions = buildKindOptionsHTML(slide.chartKind, recommended);
 
     // 항목 유형 자동 파악
@@ -1174,12 +1202,14 @@
         <details class="ie-advanced">
           <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
           <div class="ie-advanced-body">
+        ${slide._wb ? `<div class="ie-field">
+          <button class="ie-reselect-btn">📊 데이터 영역 다시 선택</button>
+        </div>` : ''}
         <div class="ie-field">
           <div class="ie-preview-header-row">
-            <label>📋 데이터 미리보기 <span class="ie-preview-summary">${summaryText}</span></label>
+            <label>📋 데이터 미리보기</label>
             <button class="ie-expand-btn" title="전체 데이터 보기">🔍 확대</button>
           </div>
-          <div class="ie-preview-hint">셀을 클릭하면 차트에서 위치를 확인할 수 있어요</div>
           ${previewHTML}
         </div>
         ${slide.chartKind === 'scatter' || slide.parsed.type === 'loyalty_compare' ? `
@@ -1195,10 +1225,10 @@
           </div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px">이미지 URL을 붙여넣으세요 (비워두면 자동 감지)</div>
         </div>` : ''}
-        ${hasRange ? `
         <div class="ie-field">
           <button class="ie-transpose" data-active="${slide.transposed}">🔄 행/열 바꾸기 ${slide.transposed?'(전환됨)':''}</button>
         </div>
+        ${hasRange ? `
         <div class="ie-field">
           <label>표시할 ${itemType} (${fullData.length}개)</label>
           <div style="display:flex;gap:8px;align-items:center">
@@ -1229,6 +1259,12 @@
       panel.remove();
       wrapper.classList.remove('editing');
       wrapper.style.transform = '';
+    });
+
+    // 예시 버튼
+    panel.querySelector('.btn-filter-example')?.addEventListener('click', () => {
+      const inp = panel.querySelector('[data-key="filterInfo"]');
+      if (inp) { inp.value = 'OS: Android+iOS / 기간: 2024.03 / 성별: 전체 / 연령: 전체'; inp.dispatchEvent(new Event('input', {bubbles:true})); }
     });
 
     // 범위 초기값
@@ -1303,6 +1339,16 @@
       decSelect.addEventListener('change', () => {
         slide.decimalPlaces = Number(decSelect.value);
         liveUpdate();
+      });
+    }
+
+    // 데이터 영역 다시 선택
+    const reselectBtn = panel.querySelector('.ie-reselect-btn');
+    if (reselectBtn) {
+      reselectBtn.addEventListener('click', () => {
+        panel.remove();
+        wrapper.classList.remove('editing');
+        openSpreadsheetViewer(slide._wb, slide._wbName, slide);
       });
     }
 
@@ -1998,27 +2044,73 @@
     const parsed = applyVisibleCols(slide);
     const { type, headers, data, meta } = parsed;
 
+    // 데이터 부족 체크
+    const numCols = headers.filter((_,i) => i > 0 && data.some(r => !isNaN(Number(r[i])))).length;
+    if (!data || data.length === 0 || numCols === 0) {
+      return _buildEmptyCard(slide, '표시할 데이터가 없어요', data.length === 0
+        ? '데이터 행이 비어있어요. 시리즈를 다시 선택하거나 데이터를 확인해주세요.'
+        : '숫자 열을 찾을 수 없어요. 행/열을 바꿔보거나 데이터를 다시 선택해보세요.');
+    }
+
     // 전역 설정 (SVG 차트에서 참조)
     SvgCharts._filterInfo = filterInfo || '';
     SvgCharts._hideValueLabels = slide.hideValueLabels || false;
     SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
 
-    switch (chartKind) {
-      case 'line': return buildLine(slide, parsed);
-      case 'verticalBar': return buildVerticalBar(slide, parsed);
-      case 'horizontalBar': return buildHorizontalBar(slide, parsed);
-      case 'donut': return buildDonut(slide, parsed);
-      case 'combo': return buildCombo(slide, parsed);
-      case 'scatter': return buildScatter(slide, parsed);
-      case 'bubble': return buildBubble(slide, parsed);
-      case 'stackedBar': return buildStackedBar(slide, parsed);
-      case 'splitBar': return buildSplitBar(slide, parsed);
-      case 'heatmap': return SvgCharts.heatmap(title, subtitle, source, headers, data);
-      case 'venn': return buildVenn(slide, parsed);
-      case 'flowCard': return buildFlowCard(slide, parsed);
-      case 'table':
-      default: return SvgCharts.table(title, subtitle, source, headers, data);
+    try {
+      switch (chartKind) {
+        case 'line': return buildLine(slide, parsed);
+        case 'verticalBar': return buildVerticalBar(slide, parsed);
+        case 'horizontalBar': return buildHorizontalBar(slide, parsed);
+        case 'donut': return buildDonut(slide, parsed);
+        case 'combo': return buildCombo(slide, parsed);
+        case 'scatter': return buildScatter(slide, parsed);
+        case 'bubble': return buildBubble(slide, parsed);
+        case 'stackedBar': return buildStackedBar(slide, parsed);
+        case 'splitBar': return buildSplitBar(slide, parsed);
+        case 'heatmap': return SvgCharts.heatmap(title, subtitle, source, headers, data);
+        case 'venn': return buildVenn(slide, parsed);
+        case 'flowCard': return buildFlowCard(slide, parsed);
+        case 'table':
+        default: return SvgCharts.table(title, subtitle, source, headers, data);
+      }
+    } catch(err) {
+      console.warn('차트 렌더링 실패:', err);
+      return _buildEmptyCard(slide, '차트를 그릴 수 없어요', '이 데이터에 맞지 않는 차트 유형일 수 있어요. 다른 유형을 선택하거나 행/열을 바꿔보세요.');
     }
+  }
+
+  // 빈 차트 도움말 카드
+  function _buildEmptyCard(slide, heading, desc) {
+    const div = document.createElement('div');
+    div.className = 'chart-slide';
+    div.innerHTML = `
+      <div class="empty-chart-card">
+        <div class="ecc-icon">📊</div>
+        <div class="ecc-heading">${_h(heading)}</div>
+        <div class="ecc-desc">${_h(desc)}</div>
+        <div class="ecc-actions">
+          <button class="ecc-btn ecc-transpose-btn">🔄 행/열 바꿔보기</button>
+          <button class="ecc-btn ecc-reselect-btn">📂 데이터 다시 선택</button>
+        </div>
+      </div>
+    `;
+    // 행/열 바꾸기
+    div.querySelector('.ecc-transpose-btn').addEventListener('click', () => {
+      slide.transposed = !slide.transposed;
+      const wrapper = div.closest('.slide-wrapper');
+      if (wrapper) { rerenderChart(slide, wrapper); saveProject(); }
+    });
+    // 데이터 다시 선택 — 파일 입력 트리거
+    div.querySelector('.ecc-reselect-btn').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,.xlsx,.xls';
+      input.multiple = true;
+      input.addEventListener('change', () => { if (input.files.length) handleFiles(input.files); });
+      input.click();
+    });
+    return div;
   }
 
   function applyVisibleCols(slide) {
@@ -2355,7 +2447,7 @@
     modal.className = 'editor-modal';
 
     const dataType = slide.parsed?.type || slide.fullParsed?.type || '';
-    const recommended = T.RECOMMENDED[dataType] || [];
+    const recommended = Parser.getRecommendedKinds(dataType, slide.parsed?.headers || [], slide.parsed?.data || []);
     const kindOptions = buildKindOptionsHTML(slide.chartKind, recommended);
 
     // 전체 열 목록 (열 선택용)
@@ -2481,10 +2573,10 @@
               <div style="display:flex;flex-direction:column;gap:2px">${items}</div>
             </div>`;
           })()}
-          ${hasRange ? `
           <div class="editor-field">
             <button id="edTranspose" style="width:100%;padding:10px 0;border:1.5px solid var(--divider);border-radius:10px;background:${slide.transposed?'var(--accent)':'#FFF'};color:${slide.transposed?'#FFF':'var(--text-dark)'};font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s">🔄 행/열 바꾸기 ${slide.transposed?'(전환됨)':''}</button>
           </div>
+          ${hasRange ? `
           <div class="editor-field">
             <label>표시할 ${itemType} (전체 ${fullData.length}개)</label>
             <div style="display:flex;gap:8px;align-items:center">
@@ -2615,6 +2707,12 @@
     const close = () => { modal.classList.remove('open'); setTimeout(()=>modal.remove(), 300); };
     modal.querySelector('.editor-backdrop').addEventListener('click', close);
     modal.querySelector('.editor-close').addEventListener('click', close);
+
+    // 예시 버튼 (에디터 모달)
+    modal.querySelector('.btn-filter-example')?.addEventListener('click', () => {
+      const inp = document.getElementById('edFilterInfo');
+      if (inp) inp.value = 'OS: Android+iOS / 기간: 2024.03 / 성별: 전체 / 연령: 전체';
+    });
 
     // 적용
     modal.querySelector('.editor-apply').addEventListener('click', () => {
@@ -2960,7 +3058,12 @@
     if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
   });
 
-  // 페이지 로드 시 저장된 프로젝트 목록 표시
-  showSavedProjects();
+  // 페이지 로드 시 마지막 프로젝트 자동 복원
+  const lastProjectId = localStorage.getItem('cs-last-project');
+  if (lastProjectId && loadProject(lastProjectId)) {
+    // 마지막 프로젝트 복원 성공
+  } else {
+    showSavedProjects();
+  }
 
 })();

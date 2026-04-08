@@ -548,8 +548,13 @@
     function updateSelInfo() {
       const info = modal.querySelector('.ss-sel-info');
       const btn = modal.querySelector('.ss-create-btn');
-      if (info) info.textContent = hasSelection() ? getSelectionInfo() : '영역을 드래그하거나 열 헤더를 클릭하세요';
-      if (btn) btn.disabled = !hasSelection();
+      if (hasSelection()) {
+        if (info) info.textContent = '✅ ' + getSelectionInfo() + ' — 차트 만들기를 눌러주세요';
+        if (btn) btn.disabled = false;
+      } else {
+        if (info) info.textContent = '차트에 넣을 영역을 선택하세요';
+        if (btn) btn.disabled = true;
+      }
     }
 
     function buildFromSelection() {
@@ -631,7 +636,7 @@
         <div class="ss-header">
           <div class="ss-header-left">
             <span class="ss-title">📊 ${_h(fileName)}</span>
-            <span class="ss-sel-info">영역을 드래그해서 선택하세요</span>
+            <span class="ss-sel-info">차트에 넣을 영역을 선택하세요</span>
           </div>
           <div class="ss-header-right">
             <button class="ss-create-btn" disabled>차트 만들기 →</button>
@@ -641,7 +646,9 @@
         <div class="ss-tabs">${renderTabs()}</div>
         <div class="ss-body">${renderSheet()}</div>
         <div class="ss-footer">
-          <div class="ss-hint">💡 드래그로 영역 선택 · 열 헤더(A, B…) 클릭으로 열 선택 · 행 번호 클릭으로 행 제외</div>
+          <div class="ss-hint">
+            💡 <b>셀 드래그</b>: 연속 영역 선택 &nbsp;·&nbsp; <b>열 헤더(A, B…) 클릭</b>: 떨어진 열 골라 선택 &nbsp;·&nbsp; <b>행 번호 클릭</b>: 해당 행 제외
+          </div>
         </div>
       </div>
     `;

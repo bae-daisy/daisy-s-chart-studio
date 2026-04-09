@@ -15,10 +15,10 @@ const T = {
   font: "'Pretendard', -apple-system, sans-serif",
 
   W: 1200, H: 750, EDGE: 60,
-  TITLE_Y: 44, SUBTITLE_Y: 92,
-  LEGEND_Y: 660, SOURCE_Y: 690, FILTER_Y: 710,
+  TITLE_Y: 50, SUBTITLE_Y: 95,
+  LEGEND_Y: 670, SOURCE_Y: 700, FILTER_Y: 720,
   chartTop(sub) { return sub ? 160 : 130; },
-  chartBottom() { return 600; },
+  chartBottom() { return 620; },
 
   SERIES: ['#6C5CE7','#7C6CF0','#8B7CF6','#9B8DF8','#A29BFE','#B0A8FF','#BDB6FD','#C4B5FD','#D0C9FE','#DDD6FE','#4F46E5','#3B2A8F','#5B4BD6','#7B6BF0','#9488FA','#ADA4FC','#C6BFFE','#DED9FF'],
   DONUT: ['#4F46E5','#6C5CE7','#7C6CF0','#8B7CF6','#9B8DF8','#A29BFE','#B0A8FF','#BDB6FD','#C4B5FD','#D0C9FE','#DDD6FE','#3B2A8F','#5B4BD6','#7B6BF0','#9488FA','#ADA4FC'],

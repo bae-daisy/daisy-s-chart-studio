@@ -15,7 +15,7 @@ const T = {
   font: "'Pretendard', -apple-system, sans-serif",
 
   W: 1200, H: 750, EDGE: 60,
-  TITLE_Y: 75, SUBTITLE_Y: 115,
+  TITLE_Y: 75, SUBTITLE_Y: 125,
   LEGEND_Y: 671, SOURCE_Y: 693, FILTER_Y: 710,
   chartTop(sub) { return sub ? 185 : 155; },
   chartBottom() {

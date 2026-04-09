@@ -131,6 +131,12 @@ const SvgCharts = {
 
   _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
 
+  // 범례 이름 치환
+  _legendName(name) {
+    const custom = this._legendNames && this._legendNames[name];
+    return custom || name;
+  },
+
   // 텍스트 폭 추정 (한글=fontSize*0.95, 영문/숫자=fontSize*0.55, 기타=fontSize*0.6)
   _textW(str, fontSize) {
     let w = 0;
@@ -183,23 +189,25 @@ const SvgCharts = {
         });
       }
     });
-    const totalLegW = series.reduce((s,si2) => s + this._textW(si2.label, 13) + 42, 0);
+    if (SvgCharts._hasLegend) {
+    const totalLegW = series.reduce((s,si2) => s + this._textW(this._legendName(si2.label), 13) + 42, 0);
     const legRows = totalLegW > W - T.EDGE * 2 ? 2 : 1;
     const legFontSize = legRows > 1 ? 11 : 13;
-    const totalLegW2 = series.reduce((s,si2) => s + this._textW(si2.label, legFontSize) + 36, 0);
     const perRow = legRows > 1 ? Math.ceil(series.length / 2) : series.length;
     for (let row = 0; row < legRows; row++) {
       const rowItems = series.slice(row * perRow, (row + 1) * perRow);
-      const rowW = rowItems.reduce((s,si2) => s + this._textW(si2.label, legFontSize) + 36, 0);
+      const rowW = rowItems.reduce((s,si2) => s + this._textW(this._legendName(si2.label), legFontSize) + 36, 0);
       let lx = Math.max(T.EDGE, W/2 - rowW/2);
       const ly = T.LEGEND_Y + row * 20;
       rowItems.forEach((s,i) => {
         const si = row * perRow + i;
         const c = colors[si] || T.SERIES[si%T.SERIES.length];
+        const name = this._legendName(s.label);
         svg += `<line x1="${lx}" y1="${ly}" x2="${lx+16}" y2="${ly}" stroke="${c}" stroke-width="3"/>`;
-        svg += `<text x="${lx+22}" y="${ly+4}" font-size="${legFontSize}" fill="${T.textDark}">${this._esc(s.label)}</text>`;
-        lx += this._textW(s.label, legFontSize) + 36;
+        svg += `<text x="${lx+22}" y="${ly+4}" font-size="${legFontSize}" fill="${T.textDark}">${this._esc(name)}</text>`;
+        lx += this._textW(name, legFontSize) + 36;
       });
+    }
     }
     return this._wrap(title, subtitle, source, svg);
   },
@@ -231,22 +239,23 @@ const SvgCharts = {
       });
       svg += `<text x="${gx+gW/2}" y="${cBot+24}" text-anchor="middle" fill="${T.textMuted}" font-size="12">${this._esc(l)}</text>`;
     });
-    if (series.length>1) {
-      const totalLegW = series.reduce((s,sr) => s + this._textW(sr.label, 12) + 32, 0);
+    if (series.length>1 && SvgCharts._hasLegend) {
+      const totalLegW = series.reduce((s,sr) => s + this._textW(this._legendName(sr.label), 12) + 32, 0);
       const legRows = totalLegW > W - T.EDGE * 2 ? 2 : 1;
       const lfs = legRows > 1 ? 10 : 12;
       const perRow = legRows > 1 ? Math.ceil(series.length / 2) : series.length;
       for (let row = 0; row < legRows; row++) {
         const rowItems = series.slice(row * perRow, (row + 1) * perRow);
-        const rowW = rowItems.reduce((s,sr) => s + this._textW(sr.label, lfs) + 28, 0);
+        const rowW = rowItems.reduce((s,sr) => s + this._textW(this._legendName(sr.label), lfs) + 28, 0);
         let lx = Math.max(T.EDGE, W/2 - rowW/2);
         const ly = T.LEGEND_Y + row * 18;
         rowItems.forEach((s,i) => {
           const si = row * perRow + i;
           const c=colors[si]||T.SERIES[si%T.SERIES.length];
+          const name = this._legendName(s.label);
           svg += `<rect x="${lx}" y="${ly-6}" width="12" height="12" rx="3" fill="${c}"/>`;
-          svg += `<text x="${lx+16}" y="${ly+4}" font-size="${lfs}" fill="${T.textDark}">${this._esc(s.label)}</text>`;
-          lx += this._textW(s.label, lfs)+28;
+          svg += `<text x="${lx+16}" y="${ly+4}" font-size="${lfs}" fill="${T.textDark}">${this._esc(name)}</text>`;
+          lx += this._textW(name, lfs)+28;
         });
       }
     }

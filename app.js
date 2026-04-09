@@ -1403,6 +1403,33 @@
             </div>
           </div>
         </div>`}
+        ${(() => {
+          // 범례 설정 — 시리즈 2개 이상 또는 도넛일 때
+          const legendHeaders = [];
+          for (let i = 1; i < allHeaders.length; i++) {
+            if (fullData.some(r => !isNaN(Number(r[i])))) legendHeaders.push({ idx: i, name: allHeaders[i] });
+          }
+          if (legendHeaders.length < 2 && slide.chartKind !== 'donut') return '';
+          if (!slide.legendNames) slide.legendNames = {};
+          const showLegend = slide.showLegend !== false;
+          const items = legendHeaders.map(h => {
+            const customName = slide.legendNames[h.name] || '';
+            return `<div style="display:flex;align-items:center;gap:6px;font-size:12px">
+              <span style="color:var(--text-muted);min-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_h(h.name)}</span>
+              <span style="color:var(--text-muted)">→</span>
+              <input type="text" class="ie-input ie-legend-name" data-orig="${_h(h.name)}" value="${_h(customName)}" placeholder="${_h(h.name)}" style="flex:1;font-size:11px;padding:4px 8px">
+            </div>`;
+          }).join('');
+          return `<div class="ie-field">
+            <label>📋 범례</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-bottom:6px">
+              <input type="checkbox" class="ie-legend-toggle" ${showLegend ? 'checked' : ''} style="accent-color:var(--accent);width:15px;height:15px">
+              <span>범례 표시</span>
+            </label>
+            ${showLegend ? `<div style="display:flex;flex-direction:column;gap:4px">${items}</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px">비워두면 원래 이름 사용</div>` : ''}
+          </div>`;
+        })()}
         <details class="ie-advanced">
           <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
           <div class="ie-advanced-body">
@@ -1525,6 +1552,23 @@
       });
     }
 
+    // 범례 토글
+    const legendToggle = panel.querySelector('.ie-legend-toggle');
+    if (legendToggle) {
+      legendToggle.addEventListener('change', () => {
+        slide.showLegend = legendToggle.checked;
+        liveUpdate();
+      });
+    }
+    // 범례 이름 편집
+    panel.querySelectorAll('.ie-legend-name').forEach(inp => {
+      inp.addEventListener('input', () => {
+        if (!slide.legendNames) slide.legendNames = {};
+        const orig = inp.dataset.orig;
+        slide.legendNames[orig] = inp.value;
+        liveUpdate();
+      });
+    });
 
     // 행/열 바꾸기
     const transposeBtn = panel.querySelector('.ie-transpose');
@@ -2233,8 +2277,9 @@
 
     // 범례/출처 유무 (chartBottom 동적 계산용)
     const seriesCount = headers.filter((_, i) => i > 0 && data.some(r => !isNaN(Number(r[i])))).length;
-    SvgCharts._hasLegend = seriesCount > 1 || (chartKind === 'donut');
+    SvgCharts._hasLegend = (seriesCount > 1 || (chartKind === 'donut')) && slide.showLegend !== false;
     SvgCharts._hasSource = !!source;
+    SvgCharts._legendNames = slide.legendNames || {};
 
     try {
       switch (chartKind) {

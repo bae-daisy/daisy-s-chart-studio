@@ -2338,10 +2338,25 @@
 
   function buildDonut(slide, parsed) {
     const { headers, data } = parsed || slide.parsed;
-    const segments = data.map(r => ({
-      label: r[0],
-      value: Number(r[1]) || 0
-    }));
+    let segments;
+
+    // 데이터가 1~2행 × 여러 숫자열이면 → 열을 세그먼트로 (자동 전치)
+    const numCols = headers.filter((_, i) => i > 0 && data.some(r => !isNaN(Number(r[i])))).length;
+    if (data.length <= 2 && numCols >= 2) {
+      // 첫 번째 데이터 행의 각 열을 세그먼트로
+      const row = data[0];
+      segments = [];
+      for (let i = 1; i < headers.length; i++) {
+        const v = Number(row[i]) || 0;
+        if (v > 0) segments.push({ label: headers[i], value: v });
+      }
+    } else {
+      // 기본: 행이 세그먼트 (첫 열=라벨, 둘째 열=값)
+      segments = data.map(r => ({
+        label: r[0],
+        value: Number(r[1]) || 0
+      }));
+    }
     return SvgCharts.donut(slide.title, slide.subtitle, slide.source, segments);
   }
 

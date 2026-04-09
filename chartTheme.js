@@ -15,8 +15,8 @@ const T = {
   font: "'Pretendard', -apple-system, sans-serif",
 
   W: 1200, H: 750, EDGE: 60,
-  TITLE_Y: 42, SUBTITLE_Y: 88,
-  LEGEND_Y: 680, SOURCE_Y: 712, FILTER_Y: 732,
+  TITLE_Y: 40, SUBTITLE_Y: 86,
+  LEGEND_Y: 710, SOURCE_Y: 728, FILTER_Y: 742,
   chartTop(sub) { return sub ? 160 : 130; },
   chartBottom() {
     const hl = SvgCharts && SvgCharts._hasLegend;

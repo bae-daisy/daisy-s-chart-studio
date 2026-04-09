@@ -2231,6 +2231,11 @@
     SvgCharts._hideValueLabels = slide.hideValueLabels || false;
     SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
 
+    // 범례/출처 유무 (chartBottom 동적 계산용)
+    const seriesCount = headers.filter((_, i) => i > 0 && data.some(r => !isNaN(Number(r[i])))).length;
+    SvgCharts._hasLegend = seriesCount > 1 || (chartKind === 'donut');
+    SvgCharts._hasSource = !!source;
+
     try {
       switch (chartKind) {
         case 'line': return buildLine(slide, parsed);

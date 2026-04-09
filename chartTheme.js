@@ -18,7 +18,13 @@ const T = {
   TITLE_Y: 50, SUBTITLE_Y: 95,
   LEGEND_Y: 670, SOURCE_Y: 700, FILTER_Y: 720,
   chartTop(sub) { return sub ? 160 : 130; },
-  chartBottom() { return 620; },
+  chartBottom() {
+    const hl = SvgCharts && SvgCharts._hasLegend;
+    const hs = SvgCharts && SvgCharts._hasSource;
+    if (!hl && !hs) return 700;
+    if (!hl) return 670;
+    return 620;
+  },
 
   SERIES: ['#6C5CE7','#7C6CF0','#8B7CF6','#9B8DF8','#A29BFE','#B0A8FF','#BDB6FD','#C4B5FD','#D0C9FE','#DDD6FE','#4F46E5','#3B2A8F','#5B4BD6','#7B6BF0','#9488FA','#ADA4FC','#C6BFFE','#DED9FF'],
   DONUT: ['#4F46E5','#6C5CE7','#7C6CF0','#8B7CF6','#9B8DF8','#A29BFE','#B0A8FF','#BDB6FD','#C4B5FD','#D0C9FE','#DDD6FE','#3B2A8F','#5B4BD6','#7B6BF0','#9488FA','#ADA4FC'],

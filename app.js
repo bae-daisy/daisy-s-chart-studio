@@ -1037,6 +1037,7 @@
         </div>
         <div class="st-actions">
           <button class="st-btn reselect-btn" title="데이터 영역 다시 선택">📊 데이터 다시 선택</button>
+          <button class="st-btn transpose-btn" title="행과 열 바꾸기">🔄 행/열 바꾸기</button>
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
@@ -1147,6 +1148,15 @@
           const fakeSheetData = [fd.headers, ...fd.data];
           openSpreadsheetViewer({ _fakeSheets: [{ name: '데이터', data: fakeSheetData }] }, slide.title || '데이터', slide);
         }
+        return;
+      }
+
+      // 행/열 바꾸기
+      if (btn.classList.contains('transpose-btn')) {
+        e.stopPropagation();
+        slide.transposed = !slide.transposed;
+        rerenderChart(slide, wrapper);
+        saveProject();
         return;
       }
 

@@ -1108,12 +1108,16 @@
       texts.forEach(t => {
         try {
           const bbox = t.getBBox();
+          if (bbox.width === 0 && bbox.height === 0) return;
+          // bbox에 여유 패딩 추가
+          const pad = 8;
+          const inBox = svgPt.x >= bbox.x - pad && svgPt.x <= bbox.x + bbox.width + pad &&
+                        svgPt.y >= bbox.y - pad && svgPt.y <= bbox.y + bbox.height + pad;
           const cx = bbox.x + bbox.width/2, cy = bbox.y + bbox.height/2;
           const dist = Math.sqrt((svgPt.x - cx)**2 + (svgPt.y - cy)**2);
-          // bbox 안에 있으면 거리 0으로
-          if (svgPt.x >= bbox.x && svgPt.x <= bbox.x+bbox.width && svgPt.y >= bbox.y && svgPt.y <= bbox.y+bbox.height) {
+          if (inBox) {
             if (dist < closestDist) { closest = t; closestDist = 0; }
-          } else if (dist < closestDist && dist < 30) {
+          } else if (dist < closestDist && dist < 80) {
             closest = t; closestDist = dist;
           }
         } catch(err) {}

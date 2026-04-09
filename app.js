@@ -240,6 +240,32 @@
     const apply = () => {
       t.textContent = input.value;
       overlay.remove();
+
+      // slide 데이터와 설정 패널 동기화
+      const wrapper = chartArea.closest('.slide-wrapper');
+      if (!wrapper) return;
+      const slideId = wrapper.dataset.slideId;
+      const slide = slides.find(s => s.id === slideId);
+      if (!slide) return;
+
+      // SVG 내 위치로 타이틀/부제목/출처 판별
+      const ty = parseFloat(t.getAttribute('y')) || 0;
+      if (ty <= T.TITLE_Y + 40) {
+        slide.title = input.value;
+        const inp = wrapper.querySelector('.ie-input[data-key="title"]');
+        if (inp) inp.value = input.value;
+      } else if (ty <= T.SUBTITLE_Y + 20) {
+        slide.subtitle = input.value;
+        const inp = wrapper.querySelector('.ie-input[data-key="subtitle"]');
+        if (inp) inp.value = input.value;
+      } else if (ty >= T.SOURCE_Y - 10) {
+        // 출처: "[출처: xxx]" 형태에서 추출
+        const m = input.value.match(/\[출처:\s*(.+)\]/);
+        slide.source = m ? m[1] : input.value;
+        const inp = wrapper.querySelector('.ie-input[data-key="source"]');
+        if (inp) inp.value = slide.source;
+      }
+      saveProject();
     };
     input.addEventListener('keydown', ev => {
       if (ev.key === 'Enter') { ev.preventDefault(); apply(); }

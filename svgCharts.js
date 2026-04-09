@@ -928,10 +928,12 @@ const SvgCharts = {
     const getColX = ci => T.EDGE + (ci === 0 ? 0 : firstColW + (ci - 1) * restColW);
     const getColW = ci => ci === 0 ? firstColW : restColW;
 
-    const rowH = cH / (rows + 1);
+    const rawRowH = cH / (rows + 1);
+    const rowH = Math.min(rawRowH, 60);
+    const tableH = rowH * (rows + 1);
     const fs = Math.min(14, Math.max(8, rowH * 0.4));
     const firstFs = Math.min(fs, Math.max(7, firstColW / (maxLabelLen * 0.65)));
-    const startY = cTop;
+    const startY = cTop + (cH - tableH) / 2;
 
     let svg = '';
     // 헤더

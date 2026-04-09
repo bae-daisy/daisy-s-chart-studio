@@ -1041,6 +1041,7 @@
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
+          <button class="st-btn figma-btn" title="SVG를 클립보드에 복사 → 피그마에서 붙여넣기">🎨 피그마</button>
           <button class="st-btn del-btn" title="삭제">🗑️</button>
         </div>
       `;
@@ -1187,6 +1188,25 @@
           const str = new XMLSerializer().serializeToString(svgEl);
           const blob = new Blob([str], {type:'image/svg+xml'});
           const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${slide.title}.svg`; a.click();
+        });
+        return;
+      }
+      // 피그마에서 열기 (SVG 클립보드 복사)
+      if (btn.classList.contains('figma-btn')) {
+        e.stopPropagation();
+        const chartEl = chartArea.querySelector('.chart-slide');
+        const svgEl = chartEl.querySelector('svg');
+        if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
+        inlineSvgImages(svgEl).then(() => {
+          const str = new XMLSerializer().serializeToString(svgEl);
+          navigator.clipboard.writeText(str).then(() => {
+            showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
+          }).catch(() => {
+            // 폴백: textarea로 복사
+            const ta = document.createElement('textarea');
+            ta.value = str; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+            showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
+          });
         });
         return;
       }

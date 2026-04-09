@@ -117,8 +117,8 @@ const SvgCharts = {
     const fi = filterInfo || this._filterInfo || '';
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${T.font}">`;
     svg += `<rect width="${W}" height="${H}" rx="20" fill="${T.bg}"/>`;
-    svg += `<text x="${T.EDGE}" y="${T.TITLE_Y + 30}" font-size="35" font-weight="700" fill="${T.textBlack}" letter-spacing="-1.75">${this._esc(title)}</text>`;
-    if (subtitle) svg += `<text x="${T.EDGE}" y="${T.SUBTITLE_Y + 14}" font-size="15" fill="${T.textMuted}">${this._esc(subtitle)}</text>`;
+    svg += `<text x="${T.EDGE}" y="${T.TITLE_Y + 28}" font-size="35" font-weight="700" fill="${T.textBlack}" letter-spacing="-1.75">${this._esc(title)}</text>`;
+    if (subtitle) svg += `<text x="${T.EDGE}" y="${T.SUBTITLE_Y + 12}" font-size="15" fill="${T.textMuted}">${this._esc(subtitle)}</text>`;
     svg += innerSvg;
     if (source) svg += `<text x="${W - T.EDGE}" y="${T.SOURCE_Y}" font-size="13" fill="${T.textMuted}" text-anchor="end">[출처: ${this._esc(source)}]</text>`;
     if (fi) svg += `<text x="${W/2}" y="${T.FILTER_Y}" font-size="11" fill="${T.textMuted}" text-anchor="middle">${this._esc(fi)}</text>`;

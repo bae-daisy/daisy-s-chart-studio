@@ -1372,7 +1372,7 @@
             <button type="button" class="btn-filter-example" title="예시 채우기" style="white-space:nowrap;padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f5f5ff;cursor:pointer;font-size:12px;">예시</button>
           </div>
         </div>
-        <div class="ie-field">
+        ${['bubble','heatmap','table','flowCard','venn'].includes(slide.chartKind) ? '' : `<div class="ie-field">
           <label>🔢 숫자 표시</label>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
@@ -1388,7 +1388,7 @@
               </select>
             </div>
           </div>
-        </div>
+        </div>`}
         <details class="ie-advanced">
           <summary class="ie-advanced-toggle">🔧 고급 설정</summary>
           <div class="ie-advanced-body">

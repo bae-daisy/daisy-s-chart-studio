@@ -428,10 +428,10 @@
       if (ext === 'csv') {
         const reader = new FileReader();
         reader.onload = e => {
-          const parsed = Parser.parseFile(e.target.result);
-          if (!parsed) { showToast('⚠️ 파일을 읽을 수 없어요: <b>' + _h(file.name) + '</b><br><span style="font-size:12px;opacity:0.85">데이터가 너무 적거나 형식이 맞지 않아요.</span>', true); return; }
-          if (parsed.needsHeaderSelect) { openHeaderSelectModal(parsed.rawRows, parsed.rawText); return; }
-          addSlide(parsed);
+          const text = e.target.result;
+          const rows = Parser.parseCSV(text);
+          if (!rows || rows.length < 2) { showToast('⚠️ 파일을 읽을 수 없어요: <b>' + _h(file.name) + '</b>', true); return; }
+          openSpreadsheetViewer({ _fakeSheets: [{ name: file.name.replace(/\.csv$/i, ''), data: rows }] }, file.name);
         };
         reader.readAsText(file, 'UTF-8');
       } else {

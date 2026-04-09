@@ -2000,8 +2000,12 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   font-weight: 600;
   white-space: nowrap;
   z-index: 50;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.5s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.dbl-click-hint.fade-out { opacity: 0; }
+.dbl-hint-close {
+  background: none; border: none; color: rgba(255,255,255,0.6);
+  font-size: 14px; cursor: pointer; padding: 0 2px;
+}
+.dbl-hint-close:hover { color: #FFF; }

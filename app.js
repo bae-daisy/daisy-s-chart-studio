@@ -1086,16 +1086,16 @@
     chartArea.appendChild(el);
 
     // 더블클릭으로 텍스트 바로 수정
-    let dblHintShown = false;
-    el.addEventListener('mouseenter', () => {
-      if (dblHintShown) return;
-      dblHintShown = true;
+    if (!localStorage.getItem('cs-dblhint-dismissed')) {
       const hint = document.createElement('div');
       hint.className = 'dbl-click-hint';
-      hint.textContent = '✏️ 텍스트를 더블클릭하면 수정할 수 있어요';
+      hint.innerHTML = '✏️ 텍스트를 더블클릭하면 수정할 수 있어요 <button class="dbl-hint-close">✕</button>';
       chartArea.appendChild(hint);
-      setTimeout(() => { hint.classList.add('fade-out'); setTimeout(() => hint.remove(), 500); }, 3000);
-    });
+      hint.querySelector('.dbl-hint-close').addEventListener('click', () => {
+        hint.remove();
+        localStorage.setItem('cs-dblhint-dismissed', '1');
+      });
+    }
     el.addEventListener('dblclick', e => {
       const svgEl = el.querySelector('svg');
       if (!svgEl) return;

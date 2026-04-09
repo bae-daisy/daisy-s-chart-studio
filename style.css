@@ -382,7 +382,6 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  pointer-events: none;
 }
 
 /* ── 슬라이드 액션 (툴바 오른쪽) ── */
@@ -1982,3 +1981,7 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   white-space: nowrap;
 }
 .ss-transpose-btn:hover { border-color: var(--accent); background: #F5F3FF; color: var(--accent); }
+
+/* 차트 텍스트 더블클릭 편집 힌트 */
+.chart-slide svg text { cursor: default; }
+.chart-slide svg text:hover { cursor: text; opacity: 0.85; }

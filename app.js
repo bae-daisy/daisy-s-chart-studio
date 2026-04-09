@@ -1060,6 +1060,35 @@
     el.dataset.slideId = slide.id;
     chartArea.appendChild(el);
 
+    // 더블클릭으로 텍스트 바로 수정
+    el.addEventListener('dblclick', e => {
+      const svgEl = el.querySelector('svg');
+      if (!svgEl) return;
+      // 클릭 위치에서 가장 가까운 text 요소 찾기
+      const pt = svgEl.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const svgPt = pt.matrixTransform(svgEl.getScreenCTM().inverse());
+      const texts = Array.from(svgEl.querySelectorAll('text'));
+      let closest = null, closestDist = Infinity;
+      texts.forEach(t => {
+        try {
+          const bbox = t.getBBox();
+          const cx = bbox.x + bbox.width/2, cy = bbox.y + bbox.height/2;
+          const dist = Math.sqrt((svgPt.x - cx)**2 + (svgPt.y - cy)**2);
+          // bbox 안에 있으면 거리 0으로
+          if (svgPt.x >= bbox.x && svgPt.x <= bbox.x+bbox.width && svgPt.y >= bbox.y && svgPt.y <= bbox.y+bbox.height) {
+            if (dist < closestDist) { closest = t; closestDist = 0; }
+          } else if (dist < closestDist && dist < 30) {
+            closest = t; closestDist = dist;
+          }
+        } catch(err) {}
+      });
+      if (closest) {
+        svgEl.style.pointerEvents = 'auto';
+        textClick({ stopPropagation(){}, target: closest });
+      }
+    });
+
     chartArea.style.position = 'relative';
 
     wrapper.appendChild(chartArea);

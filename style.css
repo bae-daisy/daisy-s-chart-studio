@@ -1985,3 +1985,23 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
 /* 차트 텍스트 더블클릭 편집 힌트 */
 .chart-slide svg text { cursor: default; }
 .chart-slide svg text:hover { cursor: text; opacity: 0.85; }
+
+/* 더블클릭 힌트 */
+.dbl-click-hint {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26,26,26,0.85);
+  color: #FFF;
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.5s;
+}
+.dbl-click-hint.fade-out { opacity: 0; }

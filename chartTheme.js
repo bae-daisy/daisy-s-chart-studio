@@ -15,14 +15,14 @@ const T = {
   font: "'Pretendard', -apple-system, sans-serif",
 
   W: 1200, H: 750, EDGE: 60,
-  TITLE_Y: 40, SUBTITLE_Y: 86,
-  LEGEND_Y: 710, SOURCE_Y: 728, FILTER_Y: 742,
-  chartTop(sub) { return sub ? 160 : 130; },
+  TITLE_Y: 55, SUBTITLE_Y: 98,
+  LEGEND_Y: 650, SOURCE_Y: 672, FILTER_Y: 690,
+  chartTop(sub) { return sub ? 170 : 145; },
   chartBottom() {
     const hl = SvgCharts && SvgCharts._hasLegend;
     const hs = SvgCharts && SvgCharts._hasSource;
-    if (!hl && !hs) return 700;
-    if (!hl) return 670;
+    if (!hl && !hs) return 680;
+    if (!hl) return 650;
     return 620;
   },
 

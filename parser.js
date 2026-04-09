@@ -341,13 +341,12 @@ const Parser = {
   _profileRecommend(headers, data) {
     const p = this._profileData(headers, data);
     if (p.hasDate && p.rowCount >= 5) return 'line';
-    if (p.numCols >= 2 && p.rowCount >= 3) return 'verticalBar';
-    if (p.numCols >= 2 && p.rowCount <= 2) return 'verticalBar'; // 시점 적고 시리즈 많으면 세로 바
+    if (p.numCols >= 2) return 'verticalBar';
     if (p.numCols === 1 && p.rowCount <= 6) {
       if (p.isPctLike) return 'donut';
-      return 'horizontalBar';
     }
-    if (p.rowCount <= 15) return 'horizontalBar';
+    if (p.numCols === 1 && p.rowCount > 6) return 'horizontalBar';
+    if (p.rowCount <= 15) return 'verticalBar';
     return 'table';
   },
 

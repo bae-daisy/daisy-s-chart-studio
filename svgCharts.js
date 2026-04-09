@@ -158,7 +158,7 @@ const SvgCharts = {
     const mn = Math.min(...allV), mx = Math.max(...allV), rng = mx-mn||1;
     const yMin = Math.max(0, mn-rng*0.1), yMax = mx+rng*0.1, yR = yMax-yMin;
     const xStep = labels.length>1 ? cW/(labels.length-1) : cW;
-    const toX = i => padL+i*xStep, toY = v => cTop+cH-((v-yMin)/yR)*cH;
+    const toX = i => labels.length===1 ? padL+cW/2 : padL+i*xStep, toY = v => cTop+cH-((v-yMin)/yR)*cH;
     let svg = '';
     const useMan = yMax >= 1e4;
     for (let i=0;i<=4;i++) {

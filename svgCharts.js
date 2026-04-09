@@ -383,9 +383,12 @@ const SvgCharts = {
       svg += `<rect x="${barL}" y="${barY}" width="${barW}" height="${barH}" rx="${barH/2}" fill="${T.track}"/>`;
 
       let cumX = 0;
+      // 각 바별 세그먼트 합계 → 비율로 변환
+      const rowTotal = series.reduce((s, sr) => s + (sr.data[ri] || 0), 0) || 1;
       series.forEach((sr, si) => {
         const val = sr.data[ri] || 0;
-        const segW = (val / 100) * barW;
+        const ratio = val / rowTotal;
+        const segW = ratio * barW;
         const c = segColors[si % segColors.length];
         svg += `<rect x="${barL + cumX}" y="${barY}" width="${segW + 0.5}" height="${barH}" fill="${c}" clip-path="url(#${clipId})"/>`;
         cumX += segW;

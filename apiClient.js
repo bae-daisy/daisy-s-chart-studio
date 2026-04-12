@@ -1,6 +1,13 @@
 // ── API 클라이언트 (프록시 서버 통신 + 응답 변환) ──
 const ApiClient = {
-  BASE_URL: '/api',
+  // API 서버 URL: 같은 서버면 '/api', GitHub Pages면 Render 서버로
+  BASE_URL: (function() {
+    // localhost에서는 같은 서버 사용
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return '/api';
+    // GitHub Pages 등 정적 호스팅에서는 Render API 서버 사용
+    // ⚠️ 아래 URL을 실제 Render 서비스 URL로 변경하세요
+    return 'https://daisy-s-chart-studio.onrender.com/api';
+  })(),
 
   // 카테고리 → Parser 타입 매핑
   _CATEGORY_TO_TYPE: {

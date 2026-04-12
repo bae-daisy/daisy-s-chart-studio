@@ -20,7 +20,7 @@ const PORT = 3000;
 
 // ── CORS 설정 (허용된 origin만) ──
 app.use(cors({
-  origin: ['http://localhost:3000'],
+  origin: ['http://localhost:3000', 'https://bae-daisy.github.io'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));

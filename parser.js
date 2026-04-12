@@ -329,7 +329,7 @@ const Parser = {
   _profileData(headers, data) {
     const _parseNum = (v) => { const s = String(v||'').replace(/,/g,'').replace(/%$/,''); return Number(s); };
     const numCols = headers.filter((_,i) => i>0 && data.some(r => !isNaN(_parseNum(r[i])))).length;
-    const hasDate = data.some(r => /\d+\/\d+|\d{4}[-\.]\d{2}/.test(r[0]));
+    const hasDate = data.some(r => /\d+\/\d+|\d{4}[-\.]\d{2}|^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-\/]\d{2,4}$/i.test(String(r[0]).trim()));
     const rowCount = data.length;
     const hasPct = data.some(r => r.some(c => /%$/.test(String(c||'').trim())));
     const vals = numCols >= 1 ? data.map(r => _parseNum(r[1]) || 0) : [];

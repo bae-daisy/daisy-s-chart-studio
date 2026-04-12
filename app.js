@@ -136,6 +136,8 @@
     chartArea.classList.add('text-edit-mode');
     btn.classList.add('active');
     svgEl.style.pointerEvents = 'auto';
+    svgEl.style.userSelect = 'none';
+    svgEl.style.webkitUserSelect = 'none';
 
     // 안내 배너
     const banner = document.createElement('div');
@@ -148,8 +150,13 @@
 
     // SVG 텍스트에 호버/클릭 이벤트
     const texts = svgEl.querySelectorAll('text');
+    const preventDrag = (e) => { e.preventDefault(); };
+    svgEl.addEventListener('mousedown', preventDrag);
+    svgEl._preventDrag = preventDrag;
     texts.forEach(t => {
       t.style.cursor = 'pointer';
+      t.style.userSelect = 'none';
+      t.style.webkitUserSelect = 'none';
       t._origFill = t.getAttribute('fill');
       t.addEventListener('mouseenter', textHoverIn);
       t.addEventListener('mouseleave', textHoverOut);
@@ -161,6 +168,12 @@
     chartArea.classList.remove('text-edit-mode');
     btn.classList.remove('active');
     svgEl.style.pointerEvents = '';
+    svgEl.style.userSelect = '';
+    svgEl.style.webkitUserSelect = '';
+    if (svgEl._preventDrag) {
+      svgEl.removeEventListener('mousedown', svgEl._preventDrag);
+      svgEl._preventDrag = null;
+    }
     const banner = document.body.querySelector('.text-edit-banner');
     if (banner) banner.remove();
     const overlay = chartArea.querySelector('.text-edit-overlay');
@@ -168,6 +181,8 @@
 
     svgEl.querySelectorAll('text').forEach(t => {
       t.style.cursor = '';
+      t.style.userSelect = '';
+      t.style.webkitUserSelect = '';
       t.removeAttribute('stroke');
       t.removeAttribute('stroke-width');
       t.removeAttribute('paint-order');
@@ -237,6 +252,7 @@
     input.focus();
     input.select();
 
+    const _origTextBeforeEdit = t.textContent;
     const apply = () => {
       t.textContent = input.value;
       overlay.remove();
@@ -264,6 +280,27 @@
         slide.source = m ? m[1] : input.value;
         const inp = wrapper.querySelector('.ie-input[data-key="source"]');
         if (inp) inp.value = slide.source;
+      } else {
+        // 범례 또는 기타 텍스트 수정 → legendNames에 저장 후 리렌더
+        const origText = _origTextBeforeEdit;
+        // 원본 시리즈 이름 찾기: legendNames의 값이거나 헤더에 있는 이름
+        if (!slide.legendNames) slide.legendNames = {};
+        const parsed = slide.parsed || {};
+        const headers = parsed.headers || [];
+        // 수정 전 텍스트가 legendNames의 값인지 확인
+        let origSeriesName = null;
+        for (const [k, v] of Object.entries(slide.legendNames)) {
+          if (v === origText || v === input.value) { origSeriesName = k; break; }
+        }
+        // legendNames에 없으면 헤더에서 찾기
+        if (!origSeriesName) {
+          origSeriesName = headers.find(h => h === origText) || origText;
+        }
+        if (origSeriesName && input.value !== origSeriesName) {
+          slide.legendNames[origSeriesName] = input.value;
+        }
+        // 칩 크기 재계산을 위해 리렌더
+        rerenderChart(slide, wrapper);
       }
       saveProject();
     };
@@ -417,6 +454,7 @@
     requestAnimationFrame(() => toast.classList.add('show'));
     setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 4000);
   }
+  window.showToast = showToast;
 
   function handleFiles(files) {
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -471,6 +509,7 @@
     let sel = null; // { r1, c1, r2, c2 } 사각형 선택
     let selectedCols = new Set(); // 열 헤더 클릭으로 개별 열 선택
     let excludedRows = new Set(); // 행 헤더 클릭으로 개별 행 제외
+    let excludedCols = new Set(); // 열 헤더 클릭으로 개별 열 제외
     let selMode = 'drag'; // 'drag' = 사각형, 'cols' = 열 개별
     let dragging = false;
     let dragStart = null;
@@ -532,13 +571,19 @@
       const colHdrs = modal.querySelectorAll('.ss-col-hdr');
       const rowHdrs = modal.querySelectorAll('.ss-row-hdr');
       cells.forEach(td => td.classList.remove('ss-selected', 'ss-sel-top', 'ss-sel-bottom', 'ss-sel-left', 'ss-sel-right', 'ss-excluded'));
-      colHdrs.forEach(th => th.classList.remove('ss-col-active'));
+      colHdrs.forEach(th => th.classList.remove('ss-col-active', 'ss-col-excluded'));
       rowHdrs.forEach(th => th.classList.remove('ss-row-excluded'));
 
       // 제외된 행 표시
       excludedRows.forEach(r => {
         cells.forEach(td => { if (Number(td.dataset.r) === r) td.classList.add('ss-excluded'); });
         rowHdrs.forEach(th => { if (Number(th.dataset.r) === r) th.classList.add('ss-row-excluded'); });
+      });
+
+      // 제외된 열 표시
+      excludedCols.forEach(c => {
+        cells.forEach(td => { if (Number(td.dataset.c) === c) td.classList.add('ss-excluded'); });
+        colHdrs.forEach(th => { if (Number(th.dataset.c) === c) th.classList.add('ss-col-excluded'); });
       });
 
       if (selMode === 'cols' && selectedCols.size > 0) {
@@ -605,6 +650,10 @@
 
       if (r2 - r1 < 1 || selCols.length < 1) { showToast('⚠️ 최소 2행, 1열 이상 선택해주세요', true); return; }
 
+      // 제외된 열 필터링
+      selCols = selCols.filter(c => !excludedCols.has(c));
+      if (selCols.length < 1) { showToast('⚠️ 최소 1열 이상 포함해주세요', true); return; }
+
       const headers = selCols.map(c => String(sd.data[r1] && sd.data[r1][c] != null ? sd.data[r1][c] : colLabel(c)));
       const data = [];
       for (let r = r1 + 1; r <= r2; r++) {
@@ -620,10 +669,48 @@
 
       const chartKind = Parser.recommendChart('unknown', headers, data);
       const sheetName = sd.name && sd.name !== 'Sheet1' && sd.name !== 'Sheet 1' ? sd.name : '';
+
+      // 원본 시트 데이터에서 MI-INSIGHT 메타 정보 추출 (내 앱, 리포트 타입, 필터)
+      let metaAppName = '', metaReportType = sheetName, metaFilterInfo = '';
+      if (sd.data && sd.data.length >= 3) {
+        for (let mi = 0; mi < Math.min(sd.data.length, 6); mi++) {
+          const cell = String(sd.data[mi] && sd.data[mi][0] || '').trim();
+          if (cell.startsWith('내 앱:')) {
+            metaAppName = cell;
+          } else if (cell.includes('>') && !metaReportType) {
+            metaReportType = cell;
+          } else if (cell.startsWith('(OS:') || cell.startsWith('(기간:')) {
+            metaFilterInfo = cell;
+          }
+        }
+        // reportType이 sheetName이고 메타에서 더 나은 값을 찾았으면 교체
+        if (metaReportType === sheetName) {
+          for (let mi = 0; mi < Math.min(sd.data.length, 6); mi++) {
+            const cell = String(sd.data[mi] && sd.data[mi][0] || '').trim();
+            if (cell.includes('>')) { metaReportType = cell; break; }
+          }
+        }
+      }
+
+      // reportType으로 데이터 타입 감지 (Parser.parseFile과 동일한 로직)
+      let detectedType = 'unknown';
+      const rt = metaReportType;
+      if (rt.includes('경쟁앱에서 유입') || rt.includes('유입, 유지, 이탈자 비교 분석>경쟁앱에서 유입')) detectedType = 'flow_in';
+      else if (rt.includes('경쟁앱으로 이탈') || rt.includes('유입, 유지, 이탈자 비교 분석>경쟁앱으로 이탈')) detectedType = 'flow_out';
+      else if (rt.includes('유입, 유지율 비교') || rt.includes('유입, 유지, 이탈자 비교 분석>유입')) detectedType = 'flow_retention';
+      else if (rt.includes('데모그래픽 비교 분석>사용자 구성 비교')) detectedType = 'demo_compare';
+      else if (rt.includes('데모그래픽 비교 분석>연령별 사용시간 구성')) detectedType = 'demo_time_compare';
+      else if (rt.includes('기본 사용량 비교 분석>사용자 수')) detectedType = 'compare_users';
+      else if (rt.includes('충성도 비교 분석>충성도 비교')) detectedType = 'loyalty_compare';
+      else if (rt.includes('경쟁앱 교차 사용자 분석')) detectedType = 'cross_users';
+      else if (rt.includes('경쟁앱 교차 사용 분석')) detectedType = 'cross_usage';
+
+      const detectedChartKind = detectedType !== 'unknown' ? Parser.recommendChart(detectedType, headers, data) : chartKind;
+
       const parsed = {
-        type: 'unknown',
-        chartKind,
-        meta: { reportType: sheetName, filterInfo: '', appName: '' },
+        type: detectedType,
+        chartKind: detectedChartKind,
+        meta: { reportType: metaReportType, filterInfo: metaFilterInfo, appName: metaAppName },
         headers,
         data
       };
@@ -640,7 +727,7 @@
         existingSlide.rangeEnd = parsed.data.length - 1;
         existingSlide._wb = wb;
         existingSlide._wbName = fileName;
-        existingSlide._lastSel = { selMode, sel, selectedCols: [...selectedCols], excludedRows: [...excludedRows], activeSheet };
+        existingSlide._lastSel = { selMode, sel, selectedCols: [...selectedCols], excludedRows: [...excludedRows], excludedCols: [...excludedCols], activeSheet };
         const wrapper = container.querySelector(`[data-slide-id="${existingSlide.id}"]`);
         if (wrapper) {
           rerenderChart(existingSlide, wrapper);
@@ -652,7 +739,7 @@
       } else {
         parsed._wb = wb;
         parsed._wbName = fileName;
-        parsed._lastSel = { selMode, sel, selectedCols: [...selectedCols], excludedRows: [...excludedRows], activeSheet };
+        parsed._lastSel = { selMode, sel, selectedCols: [...selectedCols], excludedRows: [...excludedRows], excludedCols: [...excludedCols], activeSheet };
         addSlide(parsed);
       }
     }
@@ -676,7 +763,7 @@
         <div class="ss-body">${renderSheet()}</div>
         <div class="ss-footer">
           <div class="ss-hint">
-            💡 <b>셀 드래그</b>: 연속 영역 선택 &nbsp;·&nbsp; <b>열 헤더 클릭</b>: 열 선택 &nbsp;·&nbsp; <b>행 번호 클릭</b>: 행 제외 &nbsp;·&nbsp; <b>Shift+클릭</b>: 범위 선택
+            💡 <b>셀 드래그</b>: 연속 영역 선택 &nbsp;·&nbsp; <b>열 헤더 클릭</b>: 열 제외 &nbsp;·&nbsp; <b>행 번호 클릭</b>: 행 제외 &nbsp;·&nbsp; <b>Shift+클릭</b>: 범위 제외
           </div>
         </div>
       </div>
@@ -697,6 +784,7 @@
       sel = ls.sel || null;
       if (ls.selectedCols) ls.selectedCols.forEach(c => selectedCols.add(c));
       if (ls.excludedRows) ls.excludedRows.forEach(r => excludedRows.add(r));
+      if (ls.excludedCols) ls.excludedCols.forEach(c => excludedCols.add(c));
       updateSelection();
     }
 
@@ -706,6 +794,7 @@
       sel = null;
       selectedCols.clear();
       excludedRows.clear();
+      excludedCols.clear();
       selMode = 'drag';
       modal.querySelector('.ss-tabs').innerHTML = renderTabs();
       modal.querySelector('.ss-body').innerHTML = renderSheet();
@@ -725,15 +814,17 @@
       const colHdr = e.target.closest('.ss-col-hdr');
       if (colHdr) {
         const c = Number(colHdr.dataset.c);
-        selMode = 'cols';
-        sel = null;
+        // 열 제외/복원 토글 (행 제외와 동일한 패턴)
         if (e.shiftKey && lastClickedCol != null) {
-          // Shift+클릭: 범위 선택
           const from = Math.min(lastClickedCol, c), to = Math.max(lastClickedCol, c);
-          for (let i = from; i <= to; i++) selectedCols.add(i);
+          const shouldExclude = !excludedCols.has(c);
+          for (let i = from; i <= to; i++) {
+            if (shouldExclude) excludedCols.add(i);
+            else excludedCols.delete(i);
+          }
         } else {
-          if (selectedCols.has(c)) selectedCols.delete(c);
-          else selectedCols.add(c);
+          if (excludedCols.has(c)) excludedCols.delete(c);
+          else excludedCols.add(c);
         }
         lastClickedCol = c;
         updateSelection();
@@ -829,6 +920,8 @@
       createAndRender(parsed, 0, parsed.data.length - 1);
     }
   }
+  window.addSlide = addSlide;
+  window.openSpreadsheetViewer = openSpreadsheetViewer;
 
   function createAndRender(parsed, startIdx, endIdx) {
     const slicedData = parsed.data.slice(startIdx, endIdx + 1);
@@ -851,6 +944,9 @@
       rangeStart: startIdx,
       rangeEnd: endIdx,
       showValueLabels: null,
+      iconShape: 'circle',
+      iconSize: 'medium',
+      lineIconMode: 'legend',
       _wb: parsed._wb || null,
       _wbName: parsed._wbName || '',
       _lastSel: parsed._lastSel || null,
@@ -1038,6 +1134,45 @@
         <div class="st-actions">
           <button class="st-btn reselect-btn" title="데이터 영역 다시 선택">📊 데이터 다시 선택</button>
           <button class="st-btn transpose-btn" title="행과 열 바꾸기">🔄 행/열 바꾸기</button>
+          <button class="st-btn icon-toggle-btn${slide.showAppIcons === false ? '' : ' active'}" title="앱 아이콘 표시/숨기기">${slide.showAppIcons === false ? '🖼️ 아이콘 OFF' : '🖼️ 아이콘 ON'}</button>
+          <div class="icon-dropdown-wrap" style="position:relative;display:inline-block">
+            <button class="st-btn icon-dropdown-trigger${slide.showAppIcons === false ? ' disabled' : ''}" title="아이콘 모양/크기 설정">▾</button>
+            <div class="icon-dropdown-menu">
+              <div class="icon-dd-section">
+                <div class="icon-dd-label">모양</div>
+                <div class="icon-dd-options">
+                  <button class="icon-dd-opt${(slide.iconShape || 'circle') === 'circle' ? ' active' : ''}" data-prop="iconShape" data-val="circle">⭕ 동그라미</button>
+                  <button class="icon-dd-opt${(slide.iconShape || 'circle') === 'square' ? ' active' : ''}" data-prop="iconShape" data-val="square">⬜ 네모</button>
+                </div>
+              </div>
+              <div class="icon-dd-section">
+                <div class="icon-dd-label">크기</div>
+                <div class="icon-dd-options">
+                  <button class="icon-dd-opt${(slide.iconSize || 'medium') === 'small' ? ' active' : ''}" data-prop="iconSize" data-val="small">소(S)</button>
+                  <button class="icon-dd-opt${(slide.iconSize || 'medium') === 'medium' ? ' active' : ''}" data-prop="iconSize" data-val="medium">중(M)</button>
+                  <button class="icon-dd-opt${(slide.iconSize || 'medium') === 'large' ? ' active' : ''}" data-prop="iconSize" data-val="large">대(L)</button>
+                </div>
+              </div>
+              ${(slide.chartKind === 'line' || slide.chartKind === 'combo') ? `<div class="icon-dd-section">
+                <div class="icon-dd-label">라인 차트 아이콘 위치</div>
+                <div class="icon-dd-options">
+                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'legend' ? ' active' : ''}" data-prop="lineIconMode" data-val="legend">📋 범례</button>
+                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'endpoint' ? ' active' : ''}" data-prop="lineIconMode" data-val="endpoint">📍 라인 끝</button>
+                </div>
+              </div>` : ''}
+            </div>
+          </div>
+          <div class="palette-dropdown-wrap" style="position:relative;display:inline-block">
+            <button class="st-btn palette-btn" title="색상 팔레트 변경">🎨 팔레트</button>
+            <div class="icon-dropdown-menu palette-dropdown-menu">
+              ${Object.entries(T.PALETTES).map(([k, p]) => {
+                const isActive = (slide.palette || 'purple') === k;
+                const previewColors = p.colors ? p.colors.slice(0, 6) : T._generatePalette(p.base).slice(0, 6);
+                const dots = previewColors.map(c => '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:2px"></span>').join('');
+                return '<button class="icon-dd-opt palette-opt' + (isActive ? ' active' : '') + '" data-palette="' + k + '">' + dots + ' ' + p.label + '</button>';
+              }).join('')}
+            </div>
+          </div>
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
@@ -1098,8 +1233,12 @@
         localStorage.setItem('cs-dblhint-dismissed', '1');
       });
     }
-    el.addEventListener('dblclick', e => {
-      const svgEl = el.querySelector('svg');
+    chartArea.addEventListener('dblclick', e => {
+      e.preventDefault();
+      window.getSelection().removeAllRanges();
+      const currentChart = chartArea.querySelector('.chart-slide');
+      if (!currentChart) return;
+      const svgEl = currentChart.querySelector('svg');
       if (!svgEl) return;
       // 클릭 위치에서 가장 가까운 text 요소 찾기
       const pt = svgEl.createSVGPoint();
@@ -1127,10 +1266,47 @@
       if (closest) {
         svgEl.style.pointerEvents = 'auto';
         textClick({ stopPropagation(){}, target: closest });
+        slide._dblFailCount = 0;
+      } else {
+        slide._dblFailCount = (slide._dblFailCount || 0) + 1;
+        if (slide._dblFailCount >= 2) {
+          showToast('💡 텍스트 수정이 잘 안되시나요? <b>⚙️ 설정</b>을 열어서 수정도 가능합니다');
+          slide._dblFailCount = 0;
+        }
       }
     });
 
+    // 드래그 시도 감지 → 텍스트 수정 안내 토스트
+    let _dragAttempts = 0;
+    let _dragStart = null;
+    el.addEventListener('mousedown', () => { _dragStart = Date.now(); });
+    el.addEventListener('mouseup', (e) => {
+      if (_dragStart && Date.now() - _dragStart > 300) {
+        // 300ms 이상 누르고 있었으면 드래그 시도로 판단
+        _dragAttempts++;
+        if (_dragAttempts >= 2) {
+          showToast('💡 텍스트 수정이 잘 안되시나요? <b>⚙️ 설정</b>을 열어서 수정도 가능합니다');
+          _dragAttempts = 0;
+        }
+      } else {
+        _dragAttempts = 0;
+      }
+      _dragStart = null;
+    });
+
     chartArea.style.position = 'relative';
+
+    // 텍스트 편집 버튼 (우측 하단)
+    const textEditBtn = document.createElement('button');
+    textEditBtn.className = 'text-edit-fab';
+    textEditBtn.innerHTML = '✏️<span class="text-edit-fab-label">텍스트 편집</span>';
+    textEditBtn.title = '텍스트 편집 모드';
+    textEditBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const currentChart = chartArea.querySelector('.chart-slide');
+      if (currentChart) toggleTextEditMode(currentChart, chartArea, textEditBtn);
+    });
+    chartArea.appendChild(textEditBtn);
 
     wrapper.appendChild(chartArea);
 
@@ -1158,6 +1334,86 @@
         slide.transposed = !slide.transposed;
         rerenderChart(slide, wrapper);
         saveProject();
+        return;
+      }
+
+      // 앱 아이콘 토글
+      if (btn.classList.contains('icon-toggle-btn')) {
+        e.stopPropagation();
+        slide.showAppIcons = slide.showAppIcons === false ? true : false;
+        renderToolbarContent();
+        rerenderChart(slide, wrapper);
+        saveProject();
+        return;
+      }
+
+      // 아이콘 드롭다운 트리거
+      if (btn.classList.contains('icon-dropdown-trigger')) {
+        e.stopPropagation();
+        if (slide.showAppIcons === false) return;
+        var ddMenu = btn.parentElement.querySelector('.icon-dropdown-menu');
+        if (!ddMenu) return;
+        ddMenu.classList.toggle('open');
+        var closeDd = function(ev) {
+          if (!ddMenu.contains(ev.target) && ev.target !== btn) {
+            ddMenu.classList.remove('open');
+            document.removeEventListener('click', closeDd);
+          }
+        };
+        if (ddMenu.classList.contains('open')) setTimeout(function() { document.addEventListener('click', closeDd); }, 0);
+        return;
+      }
+
+      // 아이콘 드롭다운 옵션 선택
+      if (btn.classList.contains('icon-dd-opt') && !btn.classList.contains('palette-opt')) {
+        e.stopPropagation();
+        var prop = btn.dataset.prop;
+        var val = btn.dataset.val;
+        if (prop === 'iconShape') slide.iconShape = val;
+        if (prop === 'iconSize') slide.iconSize = val;
+        if (prop === 'lineIconMode') slide.lineIconMode = val;
+        renderToolbarContent();
+        rerenderChart(slide, wrapper);
+        saveProject();
+        return;
+      }
+
+      // 팔레트 버튼 클릭 → 드롭다운 토글
+      if (btn.classList.contains('palette-btn')) {
+        e.stopPropagation();
+        var palMenu = toolbar.querySelector('.palette-dropdown-menu');
+        if (!palMenu) return;
+        var isOpen = palMenu.classList.contains('open');
+        // 다른 드롭다운 닫기
+        toolbar.querySelectorAll('.icon-dropdown-menu.open').forEach(function(m) { m.classList.remove('open'); });
+        if (!isOpen) {
+          palMenu.classList.add('open');
+          setTimeout(function() {
+            var closePal = function(ev) {
+              if (!palMenu.contains(ev.target) && ev.target !== btn) {
+                palMenu.classList.remove('open');
+                document.removeEventListener('click', closePal);
+              }
+            };
+            document.addEventListener('click', closePal);
+          }, 0);
+        }
+        return;
+      }
+
+      // 팔레트 옵션 선택
+      if (btn.classList.contains('palette-opt')) {
+        e.stopPropagation();
+        // 드롭다운 먼저 닫기
+        toolbar.querySelectorAll('.icon-dropdown-menu.open').forEach(function(m) { m.classList.remove('open'); });
+        var palKey = btn.dataset.palette;
+        if (T.PALETTES[palKey]) {
+          slide.palette = palKey;
+          slide.colors = [...T.getPaletteColors(palKey)];
+          rerenderChart(slide, wrapper);
+          renderToolbarContent();
+          saveProject();
+        }
         return;
       }
 
@@ -1230,6 +1486,34 @@
 
     container.appendChild(wrapper);
     requestAnimationFrame(() => { wrapper.style.transition='opacity 0.5s, transform 0.5s'; wrapper.style.opacity='1'; wrapper.style.transform='translateY(0)'; });
+
+    // 아이콘 프리로드: 데이터에서 앱 이름 추출 → API 검색 → 리렌더
+    (function preloadIcons() {
+      const parsed = slide.parsed || {};
+      const headers = parsed.headers || [];
+      const data = parsed.data || [];
+      const meta = parsed.meta || {};
+      const _skip = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고)$/;
+      const names = [];
+      headers.slice(1).forEach(h => { if (h && !_skip.test(h)) names.push(h); });
+      data.forEach(r => r.forEach(cell => {
+        const s = String(cell || '').trim();
+        if (s && s.length >= 2 && s.length <= 30 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s)) names.push(s);
+      }));
+      if (meta.appName) names.push(meta.appName.replace('내 앱:', '').trim());
+      const unique = [...new Set(names)].filter(n => n && !SvgCharts._appIcon(n));
+      if (unique.length > 0) {
+        // 로딩 배지 표시
+        const badge = document.createElement('div');
+        badge.className = 'icon-loading-badge';
+        badge.innerHTML = '🔄 앱 아이콘 로딩 중...';
+        chartArea.appendChild(badge);
+        SvgCharts.preloadAppIcons(unique).then(() => {
+          badge.remove();
+          rerenderChart(slide, wrapper);
+        }).catch(() => { badge.remove(); });
+      }
+    })();
 
     // 아이콘 로드 실패 감지 (scatter 차트)
     if (slide.chartKind === 'scatter') {
@@ -2282,9 +2566,9 @@
     const parsed = applyVisibleCols(slide);
     const { type, headers, data, meta } = parsed;
 
-    // 데이터 부족 체크
+    // 데이터 부족 체크 (table은 텍스트만 있어도 OK)
     const numCols = headers.filter((_,i) => i > 0 && data.some(r => !isNaN(Number(r[i])))).length;
-    if (!data || data.length === 0 || numCols === 0) {
+    if (!data || data.length === 0 || (numCols === 0 && chartKind !== 'table')) {
       return _buildEmptyCard(slide, '표시할 데이터가 없어요', data.length === 0
         ? '데이터 행이 비어있어요. 시리즈를 다시 선택하거나 데이터를 확인해주세요.'
         : '숫자 열을 찾을 수 없어요. 행/열을 바꿔보거나 데이터를 다시 선택해보세요.');
@@ -2294,6 +2578,10 @@
     SvgCharts._filterInfo = filterInfo || '';
     SvgCharts._hideValueLabels = slide.hideValueLabels || false;
     SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
+    SvgCharts._showAppIcons = slide.showAppIcons !== false;
+    SvgCharts._iconShape = slide.iconShape || 'circle';
+    SvgCharts._iconSize = slide.iconSize || 'medium';
+    SvgCharts._lineIconMode = slide.lineIconMode || 'legend';
 
     // 범례/출처 유무 (chartBottom 동적 계산용)
     const seriesCount = headers.filter((_, i) => i > 0 && data.some(r => !isNaN(Number(r[i])))).length;
@@ -3316,6 +3604,382 @@
   document.getElementById('projectName').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
   });
+
+  // ── 온보딩 탭 전환 ──
+  (function initOnboardingTabs() {
+    const tabsContainer = document.getElementById('onboardingTabs');
+    const panelUpload = document.getElementById('panelUpload');
+    const panelApi = document.getElementById('panelApi');
+    if (!tabsContainer || !panelUpload || !panelApi) return;
+
+    let industriesLoaded = false;
+
+    // 카테고리별 UI 표시 제어
+    const SINGLE_APP_CATEGORIES = [
+      'usage/overlap-rank',
+      'usage/app/concurrent', 'usage/app/involvement', 'usage/app/break',
+      'usage/app/interest', 'usage/app/persona', 'usage/app/persona-relative', 'usage/app/region',
+      'apps/summary', 'apps/info', 'apps/ranking-history', 'apps/market-info',
+      'apps/timeline', 'apps/rate-total', 'apps/rate'
+    ];
+    const MULTI_APP_CATEGORIES = [
+      'usage/competitor/install-delete', 'usage/competitor/loyalty',
+      'usage/retention',
+      'apps/usage', 'apps/demographic', 'apps/ranking', 'apps/biz-rate'
+    ];
+    const MARKET_CATEGORIES = [
+      'chart/market/rank', 'chart/market/global-rank', 'chart/market/realtime-rank',
+      'apps/ranking-history', 'apps/market-info'
+    ];
+
+    tabsContainer.addEventListener('click', function(e) {
+      const tab = e.target.closest('.onboarding-tab');
+      if (!tab) return;
+      const target = tab.dataset.tab;
+
+      tabsContainer.querySelectorAll('.onboarding-tab').forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+
+      if (target === 'upload') {
+        panelUpload.style.display = '';
+        panelApi.style.display = 'none';
+      } else if (target === 'api') {
+        panelUpload.style.display = 'none';
+        panelApi.style.display = '';
+        // 업종 목록 최초 1회 로드
+        if (!industriesLoaded) {
+          industriesLoaded = true;
+          ApiClient.getIndustries().then(function(list) {
+            const sel = document.getElementById('apiIndustry');
+            if (!sel || !list.length) return;
+            list.forEach(function(item) {
+              var opt = document.createElement('option');
+              opt.value = item.cate_cd || item.code || item.name || '';
+              opt.textContent = item.cate_nm || item.name || item.code || '';
+              sel.appendChild(opt);
+            });
+          });
+        }
+      }
+    });
+
+    // 카테고리 변경 시 동적 필드 표시/숨김
+    var categoryInput = document.getElementById('apiCategory');
+    var pkgNameSection = document.getElementById('apiPkgNameSection');
+    var appIdsSection = document.getElementById('apiAppIdsSection');
+    var marketRow = document.getElementById('apiMarketRow');
+    var apiForm = document.getElementById('apiForm');
+    var apiMainTitle = document.getElementById('apiMainTitle');
+
+    // 사이드바 아코디언 토글
+    var sidebar = document.getElementById('apiSidebar');
+    if (sidebar) {
+      sidebar.addEventListener('click', function(e) {
+        // 그룹 헤더 클릭 → 아코디언 토글
+        var header = e.target.closest('.api-sidebar-header');
+        if (header) {
+          var group = header.closest('.api-sidebar-group');
+          var items = group.querySelector('.api-sidebar-items');
+          var isOpen = group.classList.contains('open');
+          group.classList.toggle('open');
+          items.style.display = isOpen ? 'none' : '';
+          return;
+        }
+        // 아이템 클릭 → 카테고리 선택
+        var item = e.target.closest('.api-sidebar-item');
+        if (item) {
+          var cat = item.dataset.cat;
+          // active 표시
+          sidebar.querySelectorAll('.api-sidebar-item').forEach(function(el) { el.classList.remove('active'); });
+          item.classList.add('active');
+          // hidden input 업데이트
+          if (categoryInput) categoryInput.value = cat;
+          // 타이틀 업데이트
+          if (apiMainTitle) apiMainTitle.textContent = item.textContent;
+          // 폼 표시
+          if (apiForm) apiForm.style.display = '';
+          // 동적 필드
+          if (pkgNameSection) pkgNameSection.style.display = SINGLE_APP_CATEGORIES.includes(cat) ? '' : 'none';
+          if (appIdsSection) appIdsSection.style.display = MULTI_APP_CATEGORIES.includes(cat) ? '' : 'none';
+          if (marketRow) marketRow.style.display = MARKET_CATEGORIES.includes(cat) ? '' : 'none';
+          // 업종 선택: 사용량 순위/업종 트렌드만 필요
+          var industryBar = document.getElementById('apiIndustryBar');
+          if (industryBar) {
+            var needsIndustry = cat.startsWith('usage/usage-rank') || cat.startsWith('usage/demographic') || cat.startsWith('usage/trend/') || cat.startsWith('usage/rise-rank');
+            industryBar.style.display = needsIndustry ? '' : 'none';
+          }
+        }
+      });
+    }
+
+    // OS 탭 클릭
+    var osTabs = document.getElementById('apiOsTabs');
+    var osInput = document.getElementById('apiOs');
+    if (osTabs) {
+      osTabs.addEventListener('click', function(e) {
+        var tab = e.target.closest('.api-os-tab');
+        if (!tab) return;
+        osTabs.querySelectorAll('.api-os-tab').forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        if (osInput) osInput.value = tab.dataset.os;
+      });
+    }
+
+    // 빠른 기간 선택 버튼
+    function setDateRange(months) {
+      var now = new Date();
+      var endYear = now.getFullYear();
+      var endMonth = now.getMonth(); // 이번 달 (0-indexed), 전월 데이터까지 가능하므로
+      if (endMonth === 0) { endYear--; endMonth = 12; }
+      var startMonth = endMonth - months + 1;
+      var startYear = endYear;
+      while (startMonth <= 0) { startMonth += 12; startYear--; }
+      var startEl = document.getElementById('apiStartDate');
+      var endEl = document.getElementById('apiEndDate');
+      if (startEl) startEl.value = startYear + '-' + String(startMonth).padStart(2, '0');
+      if (endEl) endEl.value = endYear + '-' + String(endMonth).padStart(2, '0');
+    }
+
+    // 기본값: 최근 3개월
+    setDateRange(3);
+
+    var quickDates = document.querySelectorAll('.api-quick-btn');
+    quickDates.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        quickDates.forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        setDateRange(Number(btn.dataset.months));
+      });
+    });
+
+    // 업종 대분류 변경 시 소분류 로드
+    var industrySelect = document.getElementById('apiIndustry');
+    var subIndustryGroup = document.getElementById('apiSubIndustryGroup');
+    var subIndustrySelect = document.getElementById('apiSubIndustry');
+    if (industrySelect && subIndustryGroup && subIndustrySelect) {
+      industrySelect.addEventListener('change', function() {
+        var mainCd = this.value;
+        if (!mainCd) {
+          subIndustryGroup.style.display = 'none';
+          subIndustrySelect.innerHTML = '<option value="">전체 (선택 안 함)</option>';
+          return;
+        }
+        subIndustryGroup.style.display = '';
+        subIndustrySelect.innerHTML = '<option value="">로딩 중...</option>';
+        ApiClient.getSubCategories(mainCd).then(function(list) {
+          subIndustrySelect.innerHTML = '<option value="">전체 (선택 안 함)</option>';
+          if (list && list.length) {
+            list.forEach(function(item) {
+              var opt = document.createElement('option');
+              opt.value = item.sub_cate_cd || item.code || item.name || '';
+              opt.textContent = item.sub_cate_nm || item.name || item.code || '';
+              subIndustrySelect.appendChild(opt);
+            });
+          }
+        });
+      });
+    }
+
+    // ── 앱 검색 공통 함수 ──
+    function createAppSearchHandler(searchInput, resultsEl, onSelect) {
+      var searchTimeout = null;
+      searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        var kw = this.value.trim();
+        if (kw.length < 2) { resultsEl.style.display = 'none'; return; }
+        searchTimeout = setTimeout(function() {
+          ApiClient.searchApps(kw).then(function(list) {
+            if (!list || !list.length) {
+              resultsEl.innerHTML = '<div class="api-search-empty">검색 결과 없음</div>';
+              resultsEl.style.display = '';
+              return;
+            }
+            resultsEl.innerHTML = list.slice(0, 8).map(function(app) {
+              var name = _h(app.appName || app.app_name || app.name || '');
+              var pkg = _h(app.pkgName || app.pkg_name || '');
+              var icon = app.iconUrl || app.icon_url || '';
+              var iconHtml = icon ? '<img class="api-search-icon" src="' + _h(icon) + '" onerror="this.style.display=\'none\'">' : '<div class="api-search-icon-placeholder">📱</div>';
+              return '<div class="api-search-item" data-pkg="' + pkg + '" data-name="' + name + '" data-icon="' + _h(icon) + '">' +
+                iconHtml +
+                '<div class="api-search-item-info"><div class="api-search-item-name">' + name + '</div>' +
+                '<div class="api-search-item-pkg">' + pkg + '</div></div></div>';
+            }).join('');
+            resultsEl.style.display = '';
+            resultsEl.querySelectorAll('.api-search-item').forEach(function(item) {
+              item.addEventListener('click', function() {
+                onSelect({ pkg: this.dataset.pkg, name: this.dataset.name, icon: this.dataset.icon });
+                resultsEl.style.display = 'none';
+                searchInput.value = '';
+              });
+            });
+          });
+        }, 300);
+      });
+    }
+
+    // 외부 클릭 시 모든 검색 결과 닫기
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.api-app-search')) {
+        document.querySelectorAll('.api-search-results').forEach(function(el) { el.style.display = 'none'; });
+      }
+    });
+
+    // ── 단일 앱 검색 ──
+    var singleSearchInput = document.getElementById('apiAppSearch');
+    var singleSearchResults = document.getElementById('apiSearchResults');
+    var singleSelectedEl = document.getElementById('apiSelectedApp');
+    var singlePkgInput = document.getElementById('apiPkgName');
+
+    if (singleSearchInput && singleSearchResults) {
+      createAppSearchHandler(singleSearchInput, singleSearchResults, function(app) {
+        if (singlePkgInput) singlePkgInput.value = app.pkg;
+        if (singleSelectedEl) {
+          var iconHtml = app.icon ? '<img class="api-chip-icon" src="' + _h(app.icon) + '" onerror="this.style.display=\'none\'">' : '';
+          singleSelectedEl.innerHTML = '<div class="api-app-chip">' + iconHtml +
+            '<span class="api-chip-name">' + _h(app.name) + '</span>' +
+            '<button type="button" class="api-chip-remove" title="제거">✕</button></div>';
+          singleSelectedEl.style.display = '';
+          singleSelectedEl.querySelector('.api-chip-remove').addEventListener('click', function() {
+            singlePkgInput.value = '';
+            singleSelectedEl.innerHTML = '';
+            singleSelectedEl.style.display = 'none';
+          });
+        }
+      });
+    }
+
+    // ── 복수 앱 검색 (경쟁앱 비교) ──
+    var multiSearchInput = document.getElementById('apiMultiAppSearch');
+    var multiSearchResults = document.getElementById('apiMultiSearchResults');
+    var selectedAppsList = document.getElementById('apiSelectedAppsList');
+    var _selectedApps = []; // { pkg, name, icon }
+
+    function renderSelectedApps() {
+      if (!selectedAppsList) return;
+      if (_selectedApps.length === 0) {
+        selectedAppsList.innerHTML = '<div class="api-apps-empty">검색해서 비교할 앱을 추가하세요</div>';
+        return;
+      }
+      selectedAppsList.innerHTML = _selectedApps.map(function(app, i) {
+        var iconHtml = app.icon ? '<img class="api-chip-icon" src="' + _h(app.icon) + '" onerror="this.style.display=\'none\'">' : '';
+        return '<div class="api-app-chip" data-idx="' + i + '">' + iconHtml +
+          '<span class="api-chip-name">' + _h(app.name) + '</span>' +
+          '<button type="button" class="api-chip-remove" data-idx="' + i + '" title="제거">✕</button></div>';
+      }).join('');
+      selectedAppsList.querySelectorAll('.api-chip-remove').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          _selectedApps.splice(Number(this.dataset.idx), 1);
+          renderSelectedApps();
+        });
+      });
+    }
+
+    if (multiSearchInput && multiSearchResults) {
+      createAppSearchHandler(multiSearchInput, multiSearchResults, function(app) {
+        if (_selectedApps.length >= 10) { showToast('⚠️ 최대 10개까지 추가할 수 있어요', true); return; }
+        if (_selectedApps.some(function(a) { return a.pkg === app.pkg; })) { showToast('⚠️ 이미 추가된 앱이에요', true); return; }
+        _selectedApps.push(app);
+        renderSelectedApps();
+      });
+      renderSelectedApps();
+    }
+
+    // 폼 제출
+    var apiForm = document.getElementById('apiForm');
+    if (apiForm) {
+      apiForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        var submitBtn = document.getElementById('apiSubmitBtn');
+        var submitText = submitBtn.querySelector('.api-submit-text');
+        var loadingEl = document.getElementById('apiLoading');
+        var category = document.getElementById('apiCategory').value;
+        if (!category) { showToast('⚠️ 카테고리를 선택해주세요', true); return; }
+
+        var startDate = document.getElementById('apiStartDate').value;
+        var endDate = document.getElementById('apiEndDate').value;
+        if (!startDate || !endDate) { showToast('⚠️ 기간을 선택해주세요', true); return; }
+
+        var periodTypeEl = document.getElementById('apiPeriodType');
+        var filters = {
+          startDate: startDate,
+          endDate: endDate,
+          periodType: periodTypeEl ? periodTypeEl.value : 'monthly',
+          os: document.getElementById('apiOs').value,
+          gender: document.getElementById('apiGender').value,
+          ageRange: document.getElementById('apiAge').value,
+          appIds: []
+        };
+
+        // 마켓
+        var marketEl = document.getElementById('apiMarket');
+        if (marketEl && MARKET_CATEGORIES.includes(category)) {
+          filters.market = marketEl.value;
+        }
+
+        // 업종
+        var industryVal = document.getElementById('apiIndustry').value;
+        if (industryVal) filters.cate_cd = industryVal;
+        var subIndustryVal = document.getElementById('apiSubIndustry');
+        if (subIndustryVal && subIndustryVal.value) filters.sub_cate_cd = subIndustryVal.value;
+
+        // 단일 앱
+        if (SINGLE_APP_CATEGORIES.includes(category)) {
+          var pkgName = document.getElementById('apiPkgName');
+          if (pkgName && pkgName.value.trim()) {
+            filters.pkg_name = pkgName.value.trim();
+          } else {
+            showToast('⚠️ 앱을 검색해서 선택해주세요', true);
+            return;
+          }
+        }
+
+        // 복수 앱 비교
+        if (MULTI_APP_CATEGORIES.includes(category)) {
+          var appNameMap = {};
+          _selectedApps.forEach(function(app) {
+            if (app.pkg) {
+              filters.appIds.push(app.pkg);
+              appNameMap[app.pkg] = app.name || app.pkg;
+            }
+          });
+          filters.appNameMap = appNameMap;
+          if (filters.appIds.length === 0) { showToast('⚠️ 비교할 앱을 최소 1개 검색해서 추가해주세요', true); return; }
+        }
+
+        // 로딩 상태
+        submitBtn.disabled = true;
+        submitText.style.display = 'none';
+        loadingEl.style.display = '';
+
+        try {
+          var result = await ApiClient.fetchData(category, filters);
+          // API 데이터를 스프레드시트 뷰어로 열기 (기존 파일 업로드와 동일한 경험)
+          var sheetData = [];
+          if (result.headers && result.headers.length) {
+            sheetData.push(result.headers);
+          }
+          if (result.data && result.data.length) {
+            result.data.forEach(function(row) { sheetData.push(row); });
+          }
+          var catLabel = document.getElementById('apiMainTitle');
+          var sheetName = (catLabel ? catLabel.textContent : '') || 'API 데이터';
+          var fakeWb = { _fakeSheets: [{ name: sheetName, data: sheetData }] };
+          if (window.openSpreadsheetViewer) {
+            window.openSpreadsheetViewer(fakeWb, sheetName + '.api');
+          } else if (window.addSlide) {
+            window.addSlide(result);
+          }
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          showToast('⚠️ ' + (err.message || '데이터를 가져올 수 없습니다'), true);
+        } finally {
+          submitBtn.disabled = false;
+          submitText.style.display = '';
+          loadingEl.style.display = 'none';
+        }
+      });
+    }
+  })();
 
   // 페이지 로드 시 마지막 프로젝트 자동 복원
   const lastProjectId = localStorage.getItem('cs-last-project');

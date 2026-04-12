@@ -1,0 +1,461 @@
+parameters:
+  dateType:
+    in: query
+    name: dateType
+    description: 조회 날짜 구분
+    required: true
+    type: string
+    enum:
+      - d
+      - w
+      - m
+  dateTypeMonth:
+    in: query
+    name: dateType
+    description: "조회 날짜 구분 (m:1개월, q:3개월)"
+    required: true
+    type: string
+    enum:
+      - m
+      - q
+  date:
+    in: query
+    name: date
+    description: | 
+      조회일 (yyyymmdd)
+      (일간 날짜, 주간 시작일:`월요일`, 월간 시작일:`1일`)
+    required: true
+    type: string
+  dateDaily:
+    in: query
+    name: date
+    description: 조회일 (yyyymmdd)
+    required: true
+    type: string
+  dateFirstDayOfMonth:
+    in: query
+    name: date
+    description: "월간 기준일:1일 (yyyymmdd)"
+    required: true
+    type: string
+  dateMonth:
+    in: query
+    name: date
+    description: 조회월 (yyyymm)
+    required: true
+    type: string
+  appType:
+    in: query
+    name: appType
+    description: 앱 구분 (game:게임, app:일반앱)
+    required: true
+    type: string
+    enum:
+      - app
+      - game
+  appTypeContainsAll:
+    in: query
+    name: appType
+    description: 앱 구분 (all:통합 순위, game:게임, app:일반앱)
+    required: true
+    type: string
+    enum:
+      - all
+      - app
+      - game
+  startRank:
+    in: query
+    name: startRank
+    description: 조회 시작 순위
+    required: true
+    type: integer
+  startRankOptional:
+    in: query
+    name: startRank
+    description: 조회 시작 순위
+    required: false
+    default: 1
+    type: integer
+  endRank:
+    in: query
+    name: endRank
+    description: 조회 끝 순위
+    type: integer
+    required: true
+  endRankOptional:
+    in: query
+    name: endRank
+    description: 조회 끝 순위
+    required: false
+    default: 100
+    type: integer
+  endRankOptional10:
+    in: query
+    name: endRank
+    description: 조회 끝 순위
+    required: false
+    default: 10
+    type: integer
+  market:
+    in: query
+    name: market
+    description: 마켓 구분
+    required: true
+    type: string
+    enum:
+      - google
+      - apple
+      - one
+  marketGlobal:
+    in: query
+    name: market
+    description: 마켓 구분
+    required: true
+    type: string
+    enum:
+      - google
+      - apple
+  marketContainsAll:
+    in: query
+    name: market
+    description: 마켓 구분
+    required: true
+    type: string
+    enum:
+      - all
+      - google
+      - apple
+      - one
+  rankType:
+    in: query
+    name: rankType
+    description: 순위 구분 (all:전체, free:무료, paid:유료, gross:매출)
+    required: false
+    default: all
+    type: string
+    enum:
+      - all
+      - free
+      - paid
+      - gross
+  countryRealtime:
+    in: query
+    name: country
+    description: "국가 구분 (kr:한국, us:미국, cn:중국, jp:일본, tw:대만)"
+    required: true
+    type: string
+    enum:
+      - kr
+      - us
+      - cn
+      - jp
+      - tw
+  countryGlobal:
+    in: query
+    name: country
+    description: "국가 구분 (us:미국, cn:중국, jp:일본, tw:대만, sg:싱가포르, de:독일, gb:영국, in:인도, ca:캐나다, ru:러시아, th:태국, id:인도네시아, my:말레이시아, hk:홍콩, ph:필리핀, tr:터키, se:스웨덴, fr:프랑스, au:호주, es:스페인)"
+    required: true
+    type: string
+    enum:
+      - us
+      - cn
+      - jp
+      - tw
+      - sg
+      - de
+      - gb
+      - in
+      - ca
+      - ru
+      - th
+      - id
+      - my
+      - hk
+      - ph
+      - tr
+      - se
+      - fr
+      - au
+      - es
+  uType:
+    in: query
+    name: uType
+    description: "순위 구분 (`user`:사용자 수, `device`:총 설치 기기, `install`:신규 설치 기기, `time`:총 사용 시간, `avgTime`:1인당 평균 사용 시간)"
+    required: true
+    type: string
+    enum:
+      - user
+      - device
+      - install
+      - time
+      - avgTime
+  uTypeApps:
+    in: query
+    name: uType
+    description: "사용량 구분 (`user`:사용자 수, `time`:사용 시간, `device`:활성 기기, `install`:신규 설치 기기)"
+    required: true
+    type: string
+    enum:
+      - user
+      - device
+      - install
+      - time
+  usageRankType:
+    in: query
+    name: rType
+    description: "사용량 구분 (`user`:사용자 수, `time`:사용 시간)"
+    required: true
+    type: string
+    enum:
+      - user
+      - time
+  uTypeUserTime:
+    in: query
+    name: uType
+    description: "순위 구분 (`user`:사용자 수, `time`:사용 시간)"
+    required: true
+    type: string
+    enum:
+      - user
+      - time
+  bizRateType:
+    in: query
+    name: rType
+    description: "점유율 구분 (`user`:사용자 점유율, `time`:사용 시간 점유율)"
+    required: true
+    type: string
+    enum:
+      - user
+      - time
+  appsDemographicType:
+    in: query
+    name: uType
+    description: "데이터 구분 (`user`:사용자 구성, `time`:연령별 사용 시간 구성)"
+    required: true
+    type: string
+    enum:
+      - user
+      - time
+  uTypeTrendUser:
+    in: query
+    name: uType
+    description: "데이터 구분 (`user`:업종 사용자 분석, `time`:업종 연령별 사용시간 분석)"
+    required: true
+    type: string
+    enum:
+      - user
+      - time
+  trafficType:
+    in: query
+    name: tType
+    description: "트래픽 구분 (`user`:업종 사용자 수, `time`:업종 사용 시간, `install`:업종 신규 설치)"
+    required: true
+    type: string
+    enum:
+      - user
+      - time
+      - install
+  appInvolvementType:
+    in: query
+    name: tType
+    description: "데이터 구분 (`time`:사용 시간, day:사용 일수)"
+    required: true
+    type: string
+    enum:
+      - time
+      - day
+  os:
+    in: query
+    name: os
+    description: OS 구분
+    required: false
+    default: total
+    type: string
+    enum:
+      - total
+      - android
+      - ios
+  age:
+    in: query
+    name: age
+    description: "연령대 (`total`:전체, `10`:10대이하, `20`:20대, `30`:30대, `40`:40대, `50`:50대, `60`:60대이상)"
+    required: false
+    default: total
+    type: string
+    enum:
+      - total
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      - 60
+  gender:
+    in: query
+    name: gender
+    description: "성별 (`total`: 전체, `m`:남성, `f`:여성)"
+    required: false
+    default: total
+    type: string
+    enum:
+      - total
+      - m
+      - f
+  appCateMain:
+    in: query
+    name: appCateMain
+    description: "업종 대분류 코드 (0: 전체)"
+    required: false
+    default: 0
+    type: string
+  appCateSub:
+    in: query
+    name: appCateSub
+    description: "업종 소분류 코드 (0: 전체)"
+    required: false
+    default: 0
+    type: string
+  startDate:
+    in: query
+    name: startDate
+    description: |
+      조회 시작일 (yyyymmdd)
+      (일간 날짜, 주간 시작일:`월요일`, 월간 시작일:`1일`)
+    required: true
+    type: string
+  endDate:
+    in: query
+    name: endDate
+    description: |
+      조회 종료일 (yyyymmdd)
+      (일간 날짜, 주간 시작일:`월요일`, 월간 시작일:`1일`)
+    required: true
+    type: string
+  startDateDaily:
+    in: query
+    name: startDate
+    description: 조회 시작일 (yyyymmdd)
+    required: true
+    type: string
+  endDateDaily:
+    in: query
+    name: endDate
+    description: 조회 종료일 (yyyymmdd)
+    required: true
+    type: string
+  startMonth:
+    in: query
+    name: startDate
+    description: 조회 시작월 (yyyymm)
+    required: true
+    type: string
+  endMonth:
+    in: query
+    name: endDate
+    description: 조회 종료월 (yyyymm)
+    required: true
+    type: string
+  startDateWeekly:
+    in: query
+    name: startDate
+    description: |
+      조회 시작일 (yyyymmdd) (주간 시작일: `월요일`)
+    required: true
+    type: string
+  endDateWeekly:
+    in: query
+    name: endDate
+    description: |
+      조회 종료일 (yyyymmdd) (주간 종료일: `일요일`)
+    required: true
+    type: string
+  pkgName:
+    in: query
+    name: pkgName
+    description: 패키지명
+    required: true
+    type: string
+    minLength: 1
+  pkgNameOptional:
+    in: query
+    name: pkgName
+    description: 패키지명
+    required: false
+    type: string
+  pkgNameMarket:
+    in: query
+    name: pkgName
+    description: |
+      앱 ID
+      - 구글: 패키지명
+      - 애플: 앱 ID
+      - 원스토어: 앱 ID
+    required: true
+    type: string
+    minLength: 1
+  lastUpdated:
+    in: query
+    name: lastUpdated
+    description: 최종 업데이트일 yyyymmdd
+    required: true
+    type: string
+  tType:
+    in: query
+    name: tType
+    description: 타임라인 조회 유형
+    required: true
+    type: string
+    enum:
+      - ss
+      - icon
+      - desc
+  bizCateType:
+    in: query
+    name: bizCateType
+    description: 업종 카테고리 분류
+    required: true
+    type: string
+    enum:
+      - main
+      - sub
+  bizCateTypeContainsAll:
+    in: query
+    name: bizCateType
+    description: "업종 카테고리 분류 (all:전체, main:업종 대분류, sub:업종 소분류)"
+    required: true
+    type: string
+    enum:
+      - all
+      - main
+      - sub
+  pubName:
+    in: query
+    name: pubName
+    description: 퍼블리셔명
+    required: true
+    type: string
+  keywordApp:
+    in: query
+    name: keyword
+    description: |
+      검색 키워드 (앱명 or 패키지명)
+      - 2글자 이상 입력
+    required: true
+    type: string
+    minLength: 2
+  viewCntOptional:
+    in: query
+    name: viewCnt
+    description: 검색한 앱의 최대 출력 수
+    required: false
+    default: 10
+    type: integer
+  regionType:
+    in: query
+    name: regionType
+    description: "지역 분석 구분 (`location`:활동 지역, `address`:거주 지역)"
+    required: true
+    type: string
+    enum:
+      - location
+      - address

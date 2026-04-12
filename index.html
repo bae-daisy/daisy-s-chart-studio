@@ -36,13 +36,172 @@
       <h1 class="onboarding-title">데이터를 넣으면<br><span class="accent">장표가 완성</span>됩니다</h1>
       <p class="onboarding-desc">MI-INSIGHT CSV를 올리면 바로 장표를 만들어드려요</p>
       <div id="savedProjects" class="saved-projects"></div>
-      <div class="upload-zone" id="uploadZone">
-        <div class="upload-icon-wrap">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+
+      <!-- 탭 전환 -->
+      <div class="onboarding-tabs" id="onboardingTabs" style="display:none">
+        <button class="onboarding-tab active" data-tab="upload">📁 파일 업로드</button>
+        <!-- API 데이터 조회 탭 숨김 (앱 아이콘 검색 API만 유지) -->
+        <!-- <button class="onboarding-tab" data-tab="api">🔗 API 데이터 조회</button> -->
+      </div>
+
+      <!-- 파일 업로드 탭 패널 -->
+      <div class="onboarding-panel" id="panelUpload">
+        <div class="upload-zone" id="uploadZone">
+          <div class="upload-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="upload-text">파일을 드래그하거나 클릭</div>
+          <div class="upload-hint">.csv, .xlsx 파일 (여러 개 가능)</div>
+          <input type="file" id="fileInput" multiple hidden>
         </div>
-        <div class="upload-text">파일을 드래그하거나 클릭</div>
-        <div class="upload-hint">.csv, .xlsx 파일 (여러 개 가능)</div>
-        <input type="file" id="fileInput" multiple hidden>
+      </div>
+
+      <!-- API 데이터 조회 탭 패널 -->
+      <div class="onboarding-panel api-layout-wide" id="panelApi" style="display:none">
+        <div class="api-layout">
+          <!-- 왼쪽: 카테고리 사이드바 -->
+          <nav class="api-sidebar" id="apiSidebar">
+            <div class="api-sidebar-section">
+              <div class="api-sidebar-group" data-group="usage-competitor">
+                <button class="api-sidebar-header" type="button">⚔️ 경쟁앱 비교 분석 <span class="api-sidebar-arrow">›</span></button>
+                <div class="api-sidebar-items" style="display:none">
+                  <button class="api-sidebar-item" type="button" data-cat="apps/usage">기본 사용량 비교</button>
+                  <button class="api-sidebar-item" type="button" data-cat="apps/demographic">데모그래픽 비교</button>
+                  <button class="api-sidebar-item" type="button" data-cat="usage/retention">리텐션 비교 (재방문율)</button>
+                  <button class="api-sidebar-item" type="button" data-cat="usage/competitor/install-delete">리텐션 비교 (삭제율)</button>
+                  <button class="api-sidebar-item" type="button" data-cat="usage/competitor/loyalty">충성도 비교</button>
+                </div>
+              </div>
+              <div class="api-sidebar-group" data-group="usage-app">
+                <button class="api-sidebar-header" type="button">🔍 내 앱 분석 <span class="api-sidebar-arrow">›</span></button>
+                <div class="api-sidebar-items" style="display:none">
+                  <button class="api-sidebar-item" type="button" data-cat="usage/app/break">이탈 고객 분석</button>
+                  <button class="api-sidebar-item" type="button" data-cat="usage/app/region">지역 분석</button>
+                </div>
+              </div>
+            </div>
+          </nav>
+
+          <!-- 오른쪽: 필터 + 결과 -->
+          <div class="api-main">
+            <div class="api-main-title" id="apiMainTitle">왼쪽에서 분석 메뉴를 선택하세요</div>
+            <form id="apiForm" class="api-form" autocomplete="off" style="display:none">
+              <input type="hidden" id="apiCategory">
+
+              <!-- OS 탭 -->
+              <div class="api-os-tabs" id="apiOsTabs">
+                <button type="button" class="api-os-tab active" data-os="all">🟢 Android+iOS</button>
+                <button type="button" class="api-os-tab" data-os="android">🤖 Android</button>
+                <button type="button" class="api-os-tab" data-os="ios">🍎 iOS</button>
+              </div>
+              <input type="hidden" id="apiOs" value="all">
+
+              <!-- 필터 바 -->
+              <div class="api-filter-bar">
+                <div class="api-filter-item">
+                  <label class="api-filter-label">기간</label>
+                  <select class="api-filter-select" id="apiPeriodType">
+                    <option value="monthly">월간</option>
+                    <option value="weekly">주간</option>
+                    <option value="daily">일간</option>
+                  </select>
+                </div>
+                <div class="api-filter-item">
+                  <label class="api-filter-label">기간 상세</label>
+                  <div class="api-date-range">
+                    <input class="api-filter-input" type="month" id="apiStartDate">
+                    <span class="api-filter-sep">~</span>
+                    <input class="api-filter-input" type="month" id="apiEndDate">
+                  </div>
+                </div>
+                <div class="api-filter-item">
+                  <label class="api-filter-label">성별</label>
+                  <select class="api-filter-select" id="apiGender">
+                    <option value="all">전체</option>
+                    <option value="male">남성</option>
+                    <option value="female">여성</option>
+                  </select>
+                </div>
+                <div class="api-filter-item">
+                  <label class="api-filter-label">연령별</label>
+                  <select class="api-filter-select" id="apiAge">
+                    <option value="all">전체</option>
+                    <option value="10">10대</option>
+                    <option value="20">20대</option>
+                    <option value="30">30대</option>
+                    <option value="40">40대</option>
+                    <option value="50">50대</option>
+                  </select>
+                </div>
+                <div class="api-filter-item" id="apiMarketRow" style="display:none">
+                  <label class="api-filter-label">마켓</label>
+                  <select class="api-filter-select" id="apiMarket">
+                    <option value="all">전체</option>
+                    <option value="google">Google Play</option>
+                    <option value="apple">App Store</option>
+                    <option value="one">ONE Store</option>
+                  </select>
+                </div>
+                <!-- 빠른 기간 버튼 -->
+                <div class="api-filter-item api-quick-dates">
+                  <button type="button" class="api-quick-btn" data-months="1">1개월</button>
+                  <button type="button" class="api-quick-btn active" data-months="3">3개월</button>
+                  <button type="button" class="api-quick-btn" data-months="6">6개월</button>
+                  <button type="button" class="api-quick-btn" data-months="12">1년</button>
+                </div>
+              </div>
+
+              <!-- 업종 -->
+              <div class="api-filter-bar" id="apiIndustryBar">
+                <div class="api-filter-item">
+                  <label class="api-filter-label">업종</label>
+                  <select class="api-filter-select" id="apiIndustry">
+                    <option value="">전체</option>
+                  </select>
+                </div>
+                <div class="api-filter-item" id="apiSubIndustryGroup" style="display:none">
+                  <label class="api-filter-label">소분류</label>
+                  <select class="api-filter-select" id="apiSubIndustry">
+                    <option value="">전체</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 단일 앱 선택 -->
+              <div class="api-form-group" id="apiPkgNameSection" style="display:none">
+                <label class="api-label">앱 선택</label>
+                <input type="hidden" id="apiPkgName">
+                <div class="api-app-search">
+                  <input class="api-input" type="text" id="apiAppSearch" placeholder="🔍 앱 이름으로 검색...">
+                  <div class="api-search-results" id="apiSearchResults" style="display:none"></div>
+                </div>
+                <div class="api-selected-app" id="apiSelectedApp" style="display:none"></div>
+              </div>
+
+              <!-- 복수 앱 비교 -->
+              <div class="api-app-ids" id="apiAppIdsSection" style="display:none">
+                <label class="api-label">비교할 앱 (최대 10개)</label>
+                <div class="api-app-search" style="margin-bottom:8px">
+                  <input class="api-input" type="text" id="apiMultiAppSearch" placeholder="🔍 앱 이름으로 검색해서 추가...">
+                  <div class="api-search-results" id="apiMultiSearchResults" style="display:none"></div>
+                </div>
+                <div class="api-selected-apps-list" id="apiSelectedAppsList"></div>
+              </div>
+
+              <button type="submit" class="api-submit-btn" id="apiSubmitBtn">
+                <span class="api-submit-text">데이터 조회</span>
+                <span class="api-loading" id="apiLoading" style="display:none">
+                  <span class="api-spinner"></span>
+                  <span class="api-loading-msg">
+                    <span class="api-msg-step">서버에 연결 중</span>
+                    <span class="api-msg-step">데이터 분석 중</span>
+                    <span class="api-msg-step">차트 준비 중</span>
+                  </span>
+                </span>
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
 
       <!-- 가이드 콜아웃 -->
@@ -127,6 +286,7 @@
   })();
   </script>
   <script src="parser.js"></script>
+  <script src="apiClient.js"></script>
   <script src="chartTheme.js"></script>
   <script src="svgCharts.js"></script>
   <script src="app.js"></script>

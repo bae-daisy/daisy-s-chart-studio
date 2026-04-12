@@ -142,9 +142,16 @@ const SvgCharts = {
     let w = 0;
     for (let i = 0; i < str.length; i++) {
       const code = str.charCodeAt(i);
-      if (code >= 0xAC00 && code <= 0xD7AF) w += fontSize * 0.95;       // 한글
-      else if (code >= 0x3000 && code <= 0x9FFF) w += fontSize * 0.95;  // CJK
-      else if (code >= 0x20 && code <= 0x7E) w += fontSize * 0.58;      // ASCII
+      const ch = str[i];
+      if (code >= 0xAC00 && code <= 0xD7AF) w += fontSize * 1.0;       // 한글
+      else if (code >= 0x3000 && code <= 0x9FFF) w += fontSize * 1.0;  // CJK
+      else if ('mwMW'.includes(ch)) w += fontSize * 0.78;              // 넓은 영문
+      else if ('iltfjr!.:;|,\''.includes(ch)) w += fontSize * 0.32;   // 좁은 영문
+      else if (ch >= 'A' && ch <= 'Z') w += fontSize * 0.68;          // 대문자
+      else if (ch >= 'a' && ch <= 'z') w += fontSize * 0.52;          // 소문자
+      else if (ch >= '0' && ch <= '9') w += fontSize * 0.56;          // 숫자
+      else if (ch === ' ') w += fontSize * 0.28;                       // 공백
+      else if (code >= 0x20 && code <= 0x7E) w += fontSize * 0.56;    // 기타 ASCII
       else w += fontSize * 0.65;
     }
     return Math.ceil(w);
@@ -153,7 +160,15 @@ const SvgCharts = {
   // ── 라인 차트 ──
   line(title, subtitle, source, labels, series, colors, showValueLabels) {
     const W = T.W, padL = T.EDGE+60, padR = T.EDGE+40;
-    const cW = W-padL-padR, cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20, cH = cBot-cTop;
+    // Legend icon mode: calculate extra cBot reduction when icons are in legend
+    var _lineIconMode = SvgCharts._lineIconMode || 'legend';
+    var _lnHasIcons = SvgCharts._showAppIcons !== false;
+    var _lnIcM = _lnHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+    var _lnLegendIconExtra = 0;
+    if (_lnHasIcons && _lnIcM && _lineIconMode === 'legend' && SvgCharts._hasLegend) {
+      _lnLegendIconExtra = _lnIcM.radius * 2 + 6;
+    }
+    const cW = W-padL-padR, cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20 - _lnLegendIconExtra, cH = cBot-cTop;
     const allV = series.flatMap(s=>s.data);
     const mn = Math.min(...allV), mx = Math.max(...allV), rng = mx-mn||1;
     const yMin = Math.max(0, mn-rng*0.1), yMax = mx+rng*0.1, yR = yMax-yMin;
@@ -190,24 +205,94 @@ const SvgCharts = {
       }
     });
     if (SvgCharts._hasLegend) {
-    const totalLegW = series.reduce((s,si2) => s + this._textW(this._legendName(si2.label), 13) + 42, 0);
-    const legRows = totalLegW > W - T.EDGE * 2 ? 2 : 1;
-    const legFontSize = legRows > 1 ? 11 : 13;
+    var _legIcShape = SvgCharts._iconShape || 'circle';
+    var _legIconW = (_lnHasIcons && _lnIcM && _lineIconMode === 'legend') ? (_lnIcM.radius * 2 + 6) : 0;
+    var _chipH = (_lnHasIcons && _lnIcM && _lineIconMode === 'legend') ? Math.max(24, _lnIcM.radius * 2 + 8) : 22;
+    var _chipPadX = 7;
+    var _chipGap = 8;
+    // 칩 너비 계산: 색상점(8) + 간격 + [아이콘 + 간격] + 텍스트 + 패딩
+    const legFontSize = 12;
+    const totalChipW = series.reduce((s,si2) => {
+      var nameW = this._textW(this._legendName(si2.label), legFontSize);
+      return s + _chipPadX*2 + 8 + 6 + _legIconW + nameW + _chipGap;
+    }, 0) - _chipGap;
+    const legRows = totalChipW > W - T.EDGE * 2 ? 2 : 1;
     const perRow = legRows > 1 ? Math.ceil(series.length / 2) : series.length;
     for (let row = 0; row < legRows; row++) {
       const rowItems = series.slice(row * perRow, (row + 1) * perRow);
-      const rowW = rowItems.reduce((s,si2) => s + this._textW(this._legendName(si2.label), legFontSize) + 36, 0);
+      const rowW = rowItems.reduce((s,si2) => {
+        var nameW = this._textW(this._legendName(si2.label), legFontSize);
+        return s + _chipPadX*2 + 8 + 6 + _legIconW + nameW + _chipGap;
+      }, 0) - _chipGap;
       let lx = Math.max(T.EDGE, W/2 - rowW/2);
-      const ly = T.LEGEND_Y + row * 20;
+      const ly = T.LEGEND_Y - 28 + row * (_chipH + 6);
       rowItems.forEach((s,i) => {
         const si = row * perRow + i;
         const c = colors[si] || T.SERIES[si%T.SERIES.length];
         const name = this._legendName(s.label);
-        svg += `<line x1="${lx}" y1="${ly}" x2="${lx+16}" y2="${ly}" stroke="${c}" stroke-width="3"/>`;
-        svg += `<text x="${lx+22}" y="${ly+4}" font-size="${legFontSize}" fill="${T.textDark}">${this._esc(name)}</text>`;
-        lx += this._textW(name, legFontSize) + 36;
+        var nameW = this._textW(name, legFontSize);
+        var chipW = Math.max(60, _chipPadX*2 + 8 + 6 + _legIconW + nameW + 4);
+        // 칩 배경
+        svg += `<rect x="${lx}" y="${ly - _chipH/2}" width="${chipW}" height="${_chipH}" rx="${_chipH/2}" fill="#F5F3FF" stroke="#E8E4FF" stroke-width="1"/>`;
+        var cx = lx + _chipPadX;
+        // 색상 점
+        svg += `<circle cx="${cx + 4}" cy="${ly}" r="4" fill="${c}"/>`;
+        cx += 8 + 6;
+        // 아이콘
+        if (_lnHasIcons && _lnIcM && _lineIconMode === 'legend') {
+          var _legIcUrl = this._appIcon(s.label);
+          if (_legIcUrl) {
+            var _legIcClip = 'ln-chip-' + si + '-' + Date.now();
+            svg += this._renderIcon(_legIcUrl, cx + _lnIcM.radius, ly, _lnIcM, _legIcShape, _legIcClip);
+          } else if (s.label && s.label.length >= 2 && !/^\d/.test(s.label)) {
+            svg += this._iconSpinner(cx + _lnIcM.radius, ly, _lnIcM.radius);
+          }
+          cx += _lnIcM.radius * 2 + 6;
+        }
+        // 이름
+        svg += `<text x="${cx}" y="${ly + 4}" font-size="${legFontSize}" font-weight="600" fill="${T.textDark}">${this._esc(name)}</text>`;
+        lx += chipW + _chipGap;
       });
     }
+    }
+    // Endpoint mode: show icons at line endpoints with collision avoidance
+    if (_lnHasIcons && _lnIcM && _lineIconMode === 'endpoint' && labels.length > 0) {
+      var _lnIcShape = SvgCharts._iconShape || 'circle';
+      var _lnIcDiam = _lnIcM.radius * 2 + 4;
+      // 각 시리즈의 마지막 Y좌표 수집
+      var _lnEndPoints = series.map((s, si) => ({
+        si: si,
+        origY: toY(s.data[s.data.length - 1]),
+        y: toY(s.data[s.data.length - 1]),
+        label: s.label
+      }));
+      // Y좌표 기준 정렬 후 겹침 해소
+      _lnEndPoints.sort((a, b) => a.y - b.y);
+      for (var ei = 1; ei < _lnEndPoints.length; ei++) {
+        var gap = _lnEndPoints[ei].y - _lnEndPoints[ei - 1].y;
+        if (gap < _lnIcDiam) {
+          _lnEndPoints[ei].y = _lnEndPoints[ei - 1].y + _lnIcDiam;
+        }
+      }
+      // Clamp Y positions within chart area
+      for (var ci = 0; ci < _lnEndPoints.length; ci++) {
+        if (_lnEndPoints[ci].y - _lnIcM.radius < cTop) _lnEndPoints[ci].y = cTop + _lnIcM.radius;
+        if (_lnEndPoints[ci].y + _lnIcM.radius > cBot) _lnEndPoints[ci].y = cBot - _lnIcM.radius;
+      }
+      // 원래 인덱스 순서로 복원
+      _lnEndPoints.sort((a, b) => a.si - b.si);
+      var lastX = toX(labels.length - 1);
+      _lnEndPoints.forEach(function(ep) {
+        var icUrl = SvgCharts._appIcon(ep.label);
+        var icX = lastX + _lnIcM.radius + 8;
+        var icY = ep.y;
+        if (icUrl) {
+          var icClip = 'ln-end-' + ep.si + '-' + Date.now();
+          svg += SvgCharts._renderIcon(icUrl, icX, icY, _lnIcM, _lnIcShape, icClip);
+        } else if (ep.label && ep.label.length >= 2 && !/^\d/.test(ep.label)) {
+          svg += SvgCharts._iconSpinner(icX, icY, _lnIcM.radius);
+        }
+      });
     }
     return this._wrap(title, subtitle, source, svg);
   },
@@ -215,7 +300,11 @@ const SvgCharts = {
   // ── 세로 바 ──
   verticalBar(title, subtitle, source, labels, series, colors, showValueLabels) {
     const W = T.W, padL = T.EDGE+60, padR = T.EDGE+40;
-    const cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20, cH = cBot-cTop, cW = W-padL-padR;
+    // 아이콘 영역 확보: 아이콘 ON이면 차트 하단을 아이콘 크기만큼 위로 올림
+    const _hasIcons = SvgCharts._showAppIcons !== false;
+    const _icM = _hasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+    const _iconAreaH = _hasIcons && _icM ? (_icM.radius * 2 + _icM.padding + 18) : 0;
+    const cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20 - _iconAreaH, cH = cBot-cTop, cW = W-padL-padR;
     const mx = Math.max(...series.flatMap(s=>s.data),1);
     const gW = cW/labels.length, gPad = Math.max(20,gW*0.2);
     const bArea = gW-gPad*2, bGap = Math.max(3,bArea*0.08);
@@ -238,24 +327,58 @@ const SvgCharts = {
         if (bW>=28 && !SvgCharts._hideValueLabels) svg += `<text x="${bx+bW/2}" y="${by-8}" text-anchor="middle" fill="${T.textDark}" font-size="11" font-weight="600">${T.fmtTick(v, dp, useMan)}</text>`;
       });
       svg += `<text x="${gx+gW/2}" y="${cBot+24}" text-anchor="middle" fill="${T.textMuted}" font-size="12">${this._esc(l)}</text>`;
+      // 앱 아이콘 (X축 라벨 아래)
+      if (SvgCharts._showAppIcons !== false) {
+        const icMetrics = this._iconMetrics(SvgCharts._iconSize);
+        const icShape = SvgCharts._iconShape || 'circle';
+        const icX = gx+gW/2, icY = cBot + 24 + icMetrics.padding + icMetrics.radius;
+        const labelIcon = this._appIcon(l);
+        if (labelIcon) {
+          const icClip = `vb-ic-${gi}-${Date.now()}`;
+          svg += this._renderIcon(labelIcon, icX, icY, icMetrics, icShape, icClip);
+        } else if (l.length >= 2 && !/^\d/.test(l)) {
+          svg += this._iconSpinner(icX, icY, icMetrics.radius);
+        }
+      }
     });
     if (series.length>1 && SvgCharts._hasLegend) {
-      const totalLegW = series.reduce((s,sr) => s + this._textW(this._legendName(sr.label), 12) + 32, 0);
-      const legRows = totalLegW > W - T.EDGE * 2 ? 2 : 1;
-      const lfs = legRows > 1 ? 10 : 12;
+      var _vbHasIcons = SvgCharts._showAppIcons !== false;
+      var _vbIcM = _vbHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+      var _vbIcShape = SvgCharts._iconShape || 'circle';
+      var _vbIconW = _vbHasIcons && _vbIcM ? (_vbIcM.radius * 2 + 6) : 0;
+      var _vbChipH = _vbHasIcons && _vbIcM ? Math.max(24, _vbIcM.radius * 2 + 8) : 22;
+      var _vbPadX = 7;
+      var _vbChipGap = 8;
+      var _vbFs = 12;
+      const totalChipW = series.reduce((s,sr) => s + _vbPadX*2 + 8 + 6 + _vbIconW + this._textW(this._legendName(sr.label), _vbFs) + _vbChipGap, 0) - _vbChipGap;
+      const legRows = totalChipW > W - T.EDGE * 2 ? 2 : 1;
       const perRow = legRows > 1 ? Math.ceil(series.length / 2) : series.length;
       for (let row = 0; row < legRows; row++) {
         const rowItems = series.slice(row * perRow, (row + 1) * perRow);
-        const rowW = rowItems.reduce((s,sr) => s + this._textW(this._legendName(sr.label), lfs) + 28, 0);
+        const rowW = rowItems.reduce((s,sr) => s + _vbPadX*2 + 8 + 6 + _vbIconW + this._textW(this._legendName(sr.label), _vbFs) + _vbChipGap, 0) - _vbChipGap;
         let lx = Math.max(T.EDGE, W/2 - rowW/2);
-        const ly = T.LEGEND_Y + row * 18;
+        const ly = T.LEGEND_Y - 28 + row * (_vbChipH + 6);
         rowItems.forEach((s,i) => {
           const si = row * perRow + i;
-          const c=colors[si]||T.SERIES[si%T.SERIES.length];
+          const c = colors[si]||T.SERIES[si%T.SERIES.length];
           const name = this._legendName(s.label);
-          svg += `<rect x="${lx}" y="${ly-6}" width="12" height="12" rx="3" fill="${c}"/>`;
-          svg += `<text x="${lx+16}" y="${ly+4}" font-size="${lfs}" fill="${T.textDark}">${this._esc(name)}</text>`;
-          lx += this._textW(name, lfs)+28;
+          var nameW = this._textW(name, _vbFs);
+          var chipW = Math.max(60, _vbPadX*2 + 8 + 6 + _vbIconW + nameW + 4);
+          svg += `<rect x="${lx}" y="${ly - _vbChipH/2}" width="${chipW}" height="${_vbChipH}" rx="${_vbChipH/2}" fill="#F5F3FF" stroke="#E8E4FF" stroke-width="1"/>`;
+          var cx = lx + _vbPadX;
+          svg += `<rect x="${cx}" y="${ly - 4}" width="8" height="8" rx="2" fill="${c}"/>`;
+          cx += 8 + 6;
+          if (_vbHasIcons && _vbIcM) {
+            var icUrl = this._appIcon(s.label);
+            if (icUrl) {
+              svg += this._renderIcon(icUrl, cx + _vbIcM.radius, ly, _vbIcM, _vbIcShape, 'vb-leg-' + si + '-' + Date.now());
+            } else if (s.label && s.label.length >= 2 && !/^\d/.test(s.label)) {
+              svg += this._iconSpinner(cx + _vbIcM.radius, ly, _vbIcM.radius);
+            }
+            cx += _vbIconW;
+          }
+          svg += `<text x="${cx}" y="${ly + 4}" font-size="${_vbFs}" font-weight="600" fill="${T.textDark}">${this._esc(name)}</text>`;
+          lx += chipW + _vbChipGap;
         });
       }
     }
@@ -274,15 +397,38 @@ const SvgCharts = {
     const totalH = rows.length*rowH, offY = cTop+(areaH-totalH)/2;
     const mx = Math.max(...rows.map(r=>r.value),1);
     let svg = '';
+    var _hbHasIcons = SvgCharts._showAppIcons !== false;
+    var _hbIcM = _hbHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+    var _hbIcShape = SvgCharts._iconShape || 'circle';
     rows.forEach((r,i) => {
       const y = offY+i*rowH, cy = y+(rowH-bH)/2;
       if (i>0) svg += `<line x1="${LX}" y1="${y}" x2="${W-LX}" y2="${y}" stroke="${T.divider}" stroke-width="0.5"/>`;
       const fillW = Math.max(0, Math.min(BW, (r.value/mx)*BW));
       const c = colors[i%colors.length] || T.dark;
-      svg += `<text x="${LX}" y="${cy+bH/2+5}" font-size="13" font-weight="700" fill="${T.textBlack}">${this._esc(r.label)}</text>`;
+      // App icon to the left of label
+      var _hbTextX = LX;
+      if (_hbHasIcons && _hbIcM) {
+        var _hbIcUrl = this._appIcon(r.label);
+        var _hbIcX = LX + _hbIcM.radius;
+        var _hbIcY = cy + bH / 2;
+        if (_hbIcUrl) {
+          var _hbIcClip = 'hb-ic-' + i + '-' + Date.now();
+          svg += this._renderIcon(_hbIcUrl, _hbIcX, _hbIcY, _hbIcM, _hbIcShape, _hbIcClip);
+        } else if (r.label && r.label.length >= 2 && !/^\d/.test(r.label)) {
+          svg += this._iconSpinner(_hbIcX, _hbIcY, _hbIcM.radius);
+        }
+        _hbTextX = LX + _hbIcM.radius * 2 + 6;
+      }
+      svg += `<text x="${_hbTextX}" y="${cy+bH/2+5}" font-size="13" font-weight="700" fill="${T.textBlack}">${this._esc(r.label)}</text>`;
       svg += `<rect x="${BAR_L}" y="${cy}" width="${BW}" height="${bH}" rx="8" fill="${T.track}"/>`;
       svg += `<rect x="${BAR_L}" y="${cy}" width="${fillW}" height="${bH}" rx="8" fill="${c}"/>`;
-      if (fillW>60 && !SvgCharts._hideValueLabels) svg += `<text x="${BAR_L+12}" y="${cy+bH/2+5}" font-size="14" font-weight="700" fill="${T.white}">${T.fmt(r.value, SvgCharts._decimalPlaces)}</text>`;
+      if (!SvgCharts._hideValueLabels) {
+        if (fillW>60) {
+          svg += `<text x="${BAR_L+12}" y="${cy+bH/2+5}" font-size="14" font-weight="700" fill="${T.white}">${T.fmt(r.value, SvgCharts._decimalPlaces)}</text>`;
+        } else {
+          svg += `<text x="${BAR_L+fillW+8}" y="${cy+bH/2+5}" font-size="14" font-weight="700" fill="${T.textDark}">${T.fmt(r.value, SvgCharts._decimalPlaces)}</text>`;
+        }
+      }
     });
     return this._wrap(title, subtitle, source, svg);
   },
@@ -304,12 +450,30 @@ const SvgCharts = {
       if (angle>18 && !SvgCharts._hideValueLabels) { const dp=SvgCharts._decimalPlaces!=null?SvgCharts._decimalPlaces:1; const mp=this._polar(CX,CY,(R+IR)/2,mid); svg+=`<text x="${mp.x}" y="${mp.y+5}" text-anchor="middle" fill="#FFF" font-size="${angle>50?14:12}" font-weight="700">${(seg.value/total*100).toFixed(dp)}%</text>`; }
     });
     const legL = CX+R+60, legTop = CY-segments.length*22;
+    var _dnHasIcons = SvgCharts._showAppIcons !== false;
+    var _dnIcM = _dnHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+    var _dnIcShape = SvgCharts._iconShape || 'circle';
+    var _dnIconExtra = _dnHasIcons && _dnIcM ? (_dnIcM.radius * 2 + 4) : 0;
     segments.forEach((seg,i) => {
       const y = legTop+i*44;
       const dp=SvgCharts._decimalPlaces!=null?SvgCharts._decimalPlaces:1;
+      // App icon before legend label
+      var _dnLegTextX = legL + 28;
+      if (_dnHasIcons && _dnIcM) {
+        var _dnIcUrl = this._appIcon(seg.label);
+        var _dnIcX = legL + 28 + _dnIcM.radius;
+        var _dnIcY = y;
+        if (_dnIcUrl) {
+          var _dnIcClip = 'dn-ic-' + i + '-' + Date.now();
+          svg += this._renderIcon(_dnIcUrl, _dnIcX, _dnIcY, _dnIcM, _dnIcShape, _dnIcClip);
+        } else if (seg.label && seg.label.length >= 2 && !/^\d/.test(seg.label)) {
+          svg += this._iconSpinner(_dnIcX, _dnIcY, _dnIcM.radius);
+        }
+        _dnLegTextX = legL + 28 + _dnIconExtra;
+      }
       svg += `<circle cx="${legL+8}" cy="${y}" r="8" fill="${T.DONUT[i%T.DONUT.length]}"/>`;
-      svg += `<text x="${legL+28}" y="${y+5}" font-size="18" fill="${T.textBlack}">${this._esc(seg.label)}</text>`;
-      svg += `<text x="${legL+220}" y="${y+5}" font-size="22" font-weight="700" fill="${T.DONUT[i%T.DONUT.length]}">${(seg.value/total*100).toFixed(dp)}%</text>`;
+      svg += `<text x="${_dnLegTextX}" y="${y+5}" font-size="18" fill="${T.textBlack}">${this._esc(seg.label)}</text>`;
+      svg += `<text x="${legL+220 + _dnIconExtra}" y="${y+5}" font-size="22" font-weight="700" fill="${T.DONUT[i%T.DONUT.length]}">${(seg.value/total*100).toFixed(dp)}%</text>`;
     });
     return this._wrap(title, subtitle, source, svg);
   },
@@ -318,7 +482,9 @@ const SvgCharts = {
   combo(title, subtitle, source, labels, barData, barLabel, lineData, lineLabel, barColor, lineColor) {
     barColor=barColor||'#C4B5FD'; lineColor=lineColor||'#6C5CE7';
     const W=T.W, padL=T.EDGE+65, padR=T.EDGE+65;
-    const cTop=T.chartTop(!!subtitle), cBot=T.chartBottom(), cH=cBot-cTop, cW=W-padL-padR;
+    // 아이콘 범례 칩 높이만큼 차트 영역 축소
+    var _cmLegExtra = (SvgCharts._showAppIcons !== false) ? 40 : 0;
+    const cTop=T.chartTop(!!subtitle), cBot=T.chartBottom() - _cmLegExtra, cH=cBot-cTop, cW=W-padL-padR;
     const bMx=Math.max(...barData,1);
     const lMn=Math.min(...lineData), lMx=Math.max(...lineData), lRng=lMx-lMn||1;
     const lYMin=Math.max(0,lMn-lRng*0.2), lYMax=lMx+lRng*0.2, lYR=lYMax-lYMin;
@@ -333,11 +499,47 @@ const SvgCharts = {
     barData.forEach((v,i)=>{const bh=(v/bMx)*cH,bx=toX(i)-bW/2,by=cTop+cH-bh;svg+=`<rect x="${bx}" y="${by}" width="${bW}" height="${bh}" fill="${barColor}" rx="${Math.min(4,bW/2)}" opacity="0.7"/>`;});
     svg+=`<polyline points="${lineData.map((v,i)=>`${toX(i)},${toLineY(v)}`).join(' ')}" fill="none" stroke="${lineColor}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
     lineData.forEach((v,i)=>svg+=`<circle cx="${toX(i)}" cy="${toLineY(v)}" r="3.5" fill="${T.bg}" stroke="${lineColor}" stroke-width="2.5"/>`);
-    const lx=W/2-80;
-    svg+=`<rect x="${lx}" y="${T.LEGEND_Y-6}" width="14" height="14" rx="3" fill="${barColor}" opacity="0.7"/>`;
-    svg+=`<text x="${lx+20}" y="${T.LEGEND_Y+5}" font-size="13" fill="${T.textDark}">${this._esc(barLabel)}</text>`;
-    svg+=`<line x1="${lx+120}" y1="${T.LEGEND_Y}" x2="${lx+140}" y2="${T.LEGEND_Y}" stroke="${lineColor}" stroke-width="3"/>`;
-    svg+=`<text x="${lx+148}" y="${T.LEGEND_Y+5}" font-size="13" fill="${T.textDark}">${this._esc(lineLabel)}</text>`;
+    var _cmHasIcons = SvgCharts._showAppIcons !== false;
+    var _cmIcM = _cmHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+    var _cmIcShape = SvgCharts._iconShape || 'circle';
+    var _cmIconW = _cmHasIcons && _cmIcM ? (_cmIcM.radius * 2 + 6) : 0;
+    var _cmChipH = _cmHasIcons && _cmIcM ? Math.max(24, _cmIcM.radius * 2 + 8) : 22;
+    var _cmPadX = 7;
+    var _cmFs = 12;
+    // 칩 1: 막대
+    var _cmBarNameW = this._textW(barLabel, _cmFs);
+    var _cmBarChipW = _cmPadX*2 + 8 + 6 + _cmIconW + _cmBarNameW;
+    // 칩 2: 꺾은선
+    var _cmLineNameW = this._textW(lineLabel, _cmFs);
+    var _cmLineChipW = _cmPadX*2 + 8 + 6 + _cmIconW + _cmLineNameW;
+    var _cmTotalW = _cmBarChipW + 10 + _cmLineChipW;
+    var _cmStartX = W/2 - _cmTotalW/2;
+    var _cmLy = T.LEGEND_Y - 28;
+    // 막대 칩
+    svg += `<rect x="${_cmStartX}" y="${_cmLy - _cmChipH/2}" width="${_cmBarChipW}" height="${_cmChipH}" rx="${_cmChipH/2}" fill="#F5F3FF" stroke="#E8E4FF" stroke-width="1"/>`;
+    var _cmCx = _cmStartX + _cmPadX;
+    svg += `<rect x="${_cmCx}" y="${_cmLy - 4}" width="8" height="8" rx="2" fill="${barColor}" opacity="0.7"/>`;
+    _cmCx += 8 + 6;
+    if (_cmHasIcons && _cmIcM) {
+      var _cmIc1 = this._appIcon(barLabel);
+      if (_cmIc1) { svg += this._renderIcon(_cmIc1, _cmCx + _cmIcM.radius, _cmLy, _cmIcM, _cmIcShape, 'cm-bl-' + Date.now()); }
+      else if (barLabel.length >= 2) { svg += this._iconSpinner(_cmCx + _cmIcM.radius, _cmLy, _cmIcM.radius); }
+      _cmCx += _cmIconW;
+    }
+    svg += `<text x="${_cmCx}" y="${_cmLy + 4}" font-size="${_cmFs}" font-weight="600" fill="${T.textDark}">${this._esc(barLabel)}</text>`;
+    // 꺾은선 칩
+    var _cmLx2 = _cmStartX + _cmBarChipW + 10;
+    svg += `<rect x="${_cmLx2}" y="${_cmLy - _cmChipH/2}" width="${_cmLineChipW}" height="${_cmChipH}" rx="${_cmChipH/2}" fill="#F5F3FF" stroke="#E8E4FF" stroke-width="1"/>`;
+    var _cmCx2 = _cmLx2 + _cmPadX;
+    svg += `<line x1="${_cmCx2}" y1="${_cmLy}" x2="${_cmCx2 + 8}" y2="${_cmLy}" stroke="${lineColor}" stroke-width="2.5" stroke-linecap="round"/>`;
+    _cmCx2 += 8 + 6;
+    if (_cmHasIcons && _cmIcM) {
+      var _cmIc2 = this._appIcon(lineLabel);
+      if (_cmIc2) { svg += this._renderIcon(_cmIc2, _cmCx2 + _cmIcM.radius, _cmLy, _cmIcM, _cmIcShape, 'cm-ll-' + Date.now()); }
+      else if (lineLabel.length >= 2) { svg += this._iconSpinner(_cmCx2 + _cmIcM.radius, _cmLy, _cmIcM.radius); }
+      _cmCx2 += _cmIconW;
+    }
+    svg += `<text x="${_cmCx2}" y="${_cmLy + 4}" font-size="${_cmFs}" font-weight="600" fill="${T.textDark}">${this._esc(lineLabel)}</text>`;
     return this._wrap(title, subtitle, source, svg);
   },
 
@@ -373,9 +575,25 @@ const SvgCharts = {
       const y = offY + ri * rowH;
       const barY = y + (rowH - barH) / 2;
 
-      // 앱명 텍스트
+      // App icon + 앱명 텍스트
+      var _sbHasIcons = SvgCharts._showAppIcons !== false;
+      var _sbIcM = _sbHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+      var _sbIcShape = SvgCharts._iconShape || 'circle';
       const textY = y + rowH / 2 + 5;
-      svg += `<text x="${LX}" y="${textY}" font-size="13" font-weight="600" fill="${T.textBlack}">${this._esc(label)}</text>`;
+      var _sbTextX = LX;
+      if (_sbHasIcons && _sbIcM) {
+        var _sbIcUrl = this._appIcon(label);
+        var _sbIcX = LX + _sbIcM.radius;
+        var _sbIcY = y + rowH / 2;
+        if (_sbIcUrl) {
+          var _sbIcClip = 'sb-ic-' + ri + '-' + Date.now();
+          svg += this._renderIcon(_sbIcUrl, _sbIcX, _sbIcY, _sbIcM, _sbIcShape, _sbIcClip);
+        } else if (label && label.length >= 2 && !/^\d/.test(label)) {
+          svg += this._iconSpinner(_sbIcX, _sbIcY, _sbIcM.radius);
+        }
+        _sbTextX = LX + _sbIcM.radius * 2 + 6;
+      }
+      svg += `<text x="${_sbTextX}" y="${textY}" font-size="13" font-weight="600" fill="${T.textBlack}">${this._esc(label)}</text>`;
 
       // 스플릿 바: 클리핑으로 전체 둥근 모서리
       const clipId = `sb-${ri}-${Date.now()}`;
@@ -434,7 +652,7 @@ const SvgCharts = {
       svg += `<rect x="${listX}" y="${listTop + 28}" width="${listW}" height="16" fill="${hdrColor}"/>`;
       svg += `<text x="${listX + 20}" y="${listTop + 28}" font-size="15" font-weight="700" fill="#FFF">${headerLabel || '경쟁앱'}</text>`;
 
-      const barAreaW = listW * 0.25;
+      const barAreaW = listW * 0.20;
       items.forEach((item, i) => {
         const y = listTop + 50 + i * rowH;
         const pctVal = Number(item.pct) || 0;
@@ -442,15 +660,34 @@ const SvgCharts = {
 
         if (i > 0) svg += `<line x1="${listX + 16}" y1="${y}" x2="${listX + listW - 16}" y2="${y}" stroke="${T.divider}" stroke-width="0.5"/>`;
 
-        svg += `<text x="${listX + 24}" y="${y + rowH/2 + 5}" font-size="14" font-weight="600" fill="${T.textMuted}">${item.rank}위</text>`;
-        svg += `<text x="${listX + 70}" y="${y + rowH/2 + 5}" font-size="14" font-weight="600" fill="${T.textBlack}">${this._esc(item.name)}</text>`;
+        const midY = y + rowH / 2;
+        svg += `<text x="${listX + 24}" y="${midY + 5}" font-size="14" font-weight="600" fill="${T.textMuted}">${item.rank}위</text>`;
 
-        const barX = listX + listW * 0.38;
-        svg += `<rect x="${barX}" y="${y + rowH/2 - 10}" width="${barAreaW}" height="20" rx="10" fill="${T.track}"/>`;
-        const fillW = Math.max((pctVal / 100) * barAreaW, 4);
-        svg += `<rect x="${barX}" y="${y + rowH/2 - 10}" width="${fillW}" height="20" rx="10" fill="${barC}"/>`;
-        svg += `<text x="${barX + barAreaW + 8}" y="${y + rowH/2 + 5}" font-size="12" font-weight="700" fill="${T.accent}">${pctVal}%</text>`;
-        svg += `<text x="${listX + listW - 20}" y="${y + rowH/2 + 5}" font-size="13" font-weight="600" fill="${T.textDark}" text-anchor="end">${T.fmt(item.value)}명</text>`;
+        // 앱 아이콘 (이름으로 검색)
+        const itemIconUrl = this._appIcon(item.name);
+        const fcMetrics = this._iconMetrics(SvgCharts._iconSize);
+        const fcShape = SvgCharts._iconShape || 'circle';
+        const icoR = fcMetrics.radius;
+        const icoX = listX + 68 + icoR;
+        if (itemIconUrl) {
+          const icClip = `fc-item-${i}-${Date.now()}`;
+          svg += this._renderIcon(itemIconUrl, icoX, midY, fcMetrics, fcShape, icClip);
+          svg += `<text x="${icoX + icoR + 8}" y="${midY + 5}" font-size="14" font-weight="600" fill="${T.textBlack}">${this._esc(item.name)}</text>`;
+        } else {
+          svg += this._iconSpinner(icoX, midY, icoR);
+          svg += `<text x="${icoX + icoR + 8}" y="${midY + 5}" font-size="14" font-weight="600" fill="${T.textBlack}">${this._esc(item.name)}</text>`;
+        }
+
+        const barX = listX + listW * 0.48;
+        const barClip = `fc-bar-${i}-${Date.now()}`;
+        svg += `<defs><clipPath id="${barClip}"><rect x="${barX}" y="${midY - 10}" width="${barAreaW}" height="20" rx="10"/></clipPath></defs>`;
+        svg += `<rect x="${barX}" y="${midY - 10}" width="${barAreaW}" height="20" rx="10" fill="${T.track}"/>`;
+        const fillW = (pctVal / 100) * barAreaW;
+        if (fillW > 0) {
+          svg += `<rect x="${barX}" y="${midY - 10}" width="${fillW}" height="20" fill="${barC}" clip-path="url(#${barClip})"/>`;
+        }
+        svg += `<text x="${barX + barAreaW + 8}" y="${midY + 5}" font-size="12" font-weight="700" fill="${T.accent}">${pctVal}%</text>`;
+        svg += `<text x="${listX + listW - 20}" y="${midY + 5}" font-size="13" font-weight="600" fill="${T.textDark}" text-anchor="end">${T.fmt(item.value)}명</text>`;
       });
 
       // 참고 문구
@@ -465,17 +702,17 @@ const SvgCharts = {
       const iconR = 28;
       const iconCx = kpiX + kpiW / 2;
       const iconCy = cardCY - 50;
-      const iconUrl = appPkg ? SvgCharts._appIcon(appPkg) : '';
+      const iconUrl = appPkg ? SvgCharts._appIcon(appPkg) : (SvgCharts._appIcon(appName) || '');
       const iconBgMap = { 'com.netflix.mediaclient': '#000000' };
       const iconBg = iconBgMap[appPkg] || '#FFFFFF';
       const iconStroke = iconBg === '#FFFFFF' ? T.divider : iconBg;
-      svg += `<circle cx="${iconCx}" cy="${iconCy}" r="${iconR}" fill="${iconBg}" stroke="${iconStroke}" stroke-width="1.5"/>`;
       if (iconUrl) {
+        svg += `<circle cx="${iconCx}" cy="${iconCy}" r="${iconR}" fill="${iconBg}" stroke="${iconStroke}" stroke-width="1.5"/>`;
         const clipId = `fc-clip-${Date.now()}`;
         svg += `<defs><clipPath id="${clipId}"><circle cx="${iconCx}" cy="${iconCy}" r="${iconR - 2}"/></clipPath></defs>`;
         svg += `<image href="${iconUrl}" x="${iconCx - iconR + 2}" y="${iconCy - iconR + 2}" width="${(iconR-2)*2}" height="${(iconR-2)*2}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>`;
       } else {
-        svg += `<text x="${iconCx}" y="${iconCy + 10}" text-anchor="middle" fill="${iconBg === '#000000' ? '#FFF' : T.dark}" font-size="22" font-weight="700">${appName.charAt(0).toUpperCase()}</text>`;
+        svg += this._iconSpinner(iconCx, iconCy, iconR);
       }
 
       svg += `<text x="${kpiX + kpiW/2}" y="${cardCY + 6}" text-anchor="middle" font-size="16" font-weight="700" fill="${T.textBlack}">${this._esc(appName)}</text>`;
@@ -501,7 +738,13 @@ const SvgCharts = {
   // ── 누적 막대 (Stacked Bar) ──
   stackedBar(title, subtitle, source, labels, series, colors) {
     const W = T.W, padL = T.EDGE + 50, padR = T.EDGE + 20;
-    const cTop = T.chartTop(!!subtitle), cBot = T.chartBottom() - 30, cH = cBot - cTop;
+    const cTop = T.chartTop(!!subtitle);
+    // Icon area: reserve space below X-axis labels when icons are enabled
+    var _sbkHasIcons = SvgCharts._showAppIcons !== false;
+    var _sbkIcM = _sbkHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
+    var _sbkIconAreaH = _sbkHasIcons && _sbkIcM ? (_sbkIcM.radius * 2 + _sbkIcM.padding + 18) : 0;
+    var _sbkIcShape = SvgCharts._iconShape || 'circle';
+    const cBot = T.chartBottom() - 30 - _sbkIconAreaH, cH = cBot - cTop;
     const cW = W - padL - padR;
     const gW = cW / labels.length, gPad = Math.max(12, gW * 0.15);
     const bW = gW - gPad * 2;
@@ -543,6 +786,18 @@ const SvgCharts = {
       // 상단 둥근 모서리 (맨 위 세그먼트)
       // X축 라벨
       svg += `<text x="${gx + gW/2}" y="${cBot + 20}" text-anchor="middle" fill="${T.textMuted}" font-size="11">${this._esc(l)}</text>`;
+      // App icon below X-axis label
+      if (_sbkHasIcons && _sbkIcM) {
+        var _sbkIcUrl = this._appIcon(l);
+        var _sbkIcX = gx + gW / 2;
+        var _sbkIcY = cBot + 20 + _sbkIcM.padding + _sbkIcM.radius;
+        if (_sbkIcUrl) {
+          var _sbkIcClip = 'stk-ic-' + gi + '-' + Date.now();
+          svg += this._renderIcon(_sbkIcUrl, _sbkIcX, _sbkIcY, _sbkIcM, _sbkIcShape, _sbkIcClip);
+        } else if (l.length >= 2 && !/^\d/.test(l)) {
+          svg += this._iconSpinner(_sbkIcX, _sbkIcY, _sbkIcM.radius);
+        }
+      }
     });
 
     // 범례
@@ -971,8 +1226,19 @@ const SvgCharts = {
   // ── 유틸 ──
   _polar(cx,cy,r,deg) { const rad=(deg-90)*Math.PI/180; return {x:cx+r*Math.cos(rad), y:cy+r*Math.sin(rad)}; },
 
-  // 패키지명 또는 앱명 → 앱 아이콘 URL (로컬 icons/ 폴더)
+  // 패키지명 또는 앱명 → 앱 아이콘 URL (로컬 icons/ 폴더 + API 캐시)
+  // 아이콘 없을 때 로딩 스피너 SVG (원형 회전 애니메이션)
+  _iconSpinner(cx, cy, r) {
+    const sr = Math.max(8, r * 0.45);
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#F3F0FF" stroke="${T.divider}" stroke-width="1.5"/>` +
+      `<circle cx="${cx}" cy="${cy}" r="${sr}" fill="none" stroke="#C4B5FD" stroke-width="2.5" stroke-dasharray="${sr * 3.14}" stroke-dashoffset="${sr * 1.57}" stroke-linecap="round">` +
+      `<animateTransform attributeName="transform" type="rotate" from="0 ${cx} ${cy}" to="360 ${cx} ${cy}" dur="1s" repeatCount="indefinite"/></circle>`;
+  },
+
+  _iconCache: {},
+
   _appIcon(nameOrPkg) {
+    if (SvgCharts._showAppIcons === false) return '';
     const map = {
       'com.netflix.mediaclient': 'icons/netflix.png',
       'net.cj.cjhv.gs.tving': 'icons/tving.png',
@@ -996,8 +1262,82 @@ const SvgCharts = {
       '왓챠': 'icons/watcha.png',
       'Watcha': 'icons/watcha.png',
     };
-    return map[nameOrPkg] || '';
+    return map[nameOrPkg] || this._iconCache[nameOrPkg] || '';
   },
+
+  // API로 앱 아이콘 URL을 미리 로드 (앱명 배열 → 캐시에 저장)
+  async preloadAppIcons(appNames) {
+    if (!appNames || appNames.length === 0) return;
+    const toFetch = appNames.filter(name => name && !this._appIcon(name));
+    if (toFetch.length === 0) return;
+    try {
+      const results = await Promise.all(toFetch.map(async (name) => {
+        try {
+          const resp = await fetch('/api/search?keyword=' + encodeURIComponent(name));
+          if (!resp.ok) return null;
+          const json = await resp.json();
+          const list = Array.isArray(json.data) ? json.data : [];
+          if (list.length > 0) {
+            const app = list[0];
+            const iconUrl = app.iconUrl || app.icon_url || '';
+            if (iconUrl) {
+              this._iconCache[name] = iconUrl;
+              // 패키지명으로도 캐시
+              const pkg = app.pkgName || app.pkg_name || '';
+              if (pkg) this._iconCache[pkg] = iconUrl;
+            }
+          }
+        } catch(e) { /* 무시 */ }
+      }));
+    } catch(e) { /* 무시 */ }
+  },
+  // ── 아이콘 크기/모양 유틸리티 ──
+  _iconMetrics(sizeKey) {
+    var map = {
+      small:  { radius: 8,  padding: 4,  imgOffset: 1 },
+      medium: { radius: 12, padding: 6,  imgOffset: 1 },
+      large:  { radius: 16, padding: 8,  imgOffset: 2 },
+    };
+    return map[sizeKey] || map.medium;
+  },
+
+  _renderIcon(url, cx, cy, metrics, shape, uniqueId) {
+    var r = metrics.radius;
+    var off = metrics.imgOffset;
+    var validShape = (shape === 'circle' || shape === 'square') ? shape : 'circle';
+
+    if (!url) {
+      return this._iconSpinner(cx, cy, r);
+    }
+
+    var svg = '';
+    svg += '<defs><clipPath id="' + uniqueId + '">';
+    if (validShape === 'square') {
+      var cornerR = Math.max(2, r * 0.25);
+      svg += '<rect x="' + (cx - r + off) + '" y="' + (cy - r + off) + '" width="' + ((r - off) * 2) + '" height="' + ((r - off) * 2) + '" rx="' + cornerR + '"/>';
+    } else {
+      svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (r - off) + '"/>';
+    }
+    svg += '</clipPath></defs>';
+
+    if (validShape === 'square') {
+      var cornerR2 = Math.max(2, r * 0.25);
+      svg += '<rect x="' + (cx - r) + '" y="' + (cy - r) + '" width="' + (r * 2) + '" height="' + (r * 2) + '" rx="' + cornerR2 + '" fill="#FFF" stroke="' + T.divider + '" stroke-width="0.8"/>';
+    } else {
+      svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#FFF" stroke="' + T.divider + '" stroke-width="0.8"/>';
+    }
+
+    svg += '<image href="' + url + '" x="' + (cx - r + off) + '" y="' + (cy - r + off) + '" width="' + ((r - off) * 2) + '" height="' + ((r - off) * 2) + '" clip-path="url(#' + uniqueId + ')" preserveAspectRatio="xMidYMid slice"/>';
+    return svg;
+  },
+
+  _chartBottomWithIcons(hasIcons, sizeKey) {
+    var base = T.chartBottom();
+    if (!hasIcons) return base;
+    var m = this._iconMetrics(sizeKey);
+    return base - (m.radius * 2 + m.padding);
+  },
+
   _smooth(pts) {
     if (pts.length<2) return '';
     let d = `M ${pts[0][0]},${pts[0][1]}`;

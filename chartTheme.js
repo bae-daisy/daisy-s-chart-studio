@@ -26,8 +26,53 @@ const T = {
     return 620;
   },
 
-  SERIES: ['#6C5CE7','#7C6CF0','#8B7CF6','#9B8DF8','#A29BFE','#B0A8FF','#BDB6FD','#C4B5FD','#D0C9FE','#DDD6FE','#4F46E5','#3B2A8F','#5B4BD6','#7B6BF0','#9488FA','#ADA4FC','#C6BFFE','#DED9FF'],
-  DONUT: ['#4F46E5','#6C5CE7','#7C6CF0','#8B7CF6','#9B8DF8','#A29BFE','#B0A8FF','#BDB6FD','#C4B5FD','#D0C9FE','#DDD6FE','#3B2A8F','#5B4BD6','#7B6BF0','#9488FA','#ADA4FC'],
+  // 색상 팔레트 프리셋 — 기본색 + 명도 단계 자동 생성
+  PALETTES: {
+    purple:   { label: '💜 보라', base: '#6C5CE7' },
+    blue:     { label: '💙 파랑', base: '#0984E3' },
+    green:    { label: '💚 초록', base: '#00B894' },
+    red:      { label: '❤️ 빨강', base: '#E74C3C' },
+    orange:   { label: '🧡 주황', base: '#E17055' },
+    yellow:   { label: '💛 노랑', base: '#F9A825' },
+    pink:     { label: '💗 핑크', base: '#E84393' },
+    cyan:     { label: '🩵 청록', base: '#00CEC9' },
+    colorful: { label: '🌈 다채로운', colors: ['#6C5CE7','#E74C3C','#00B894','#FDCB6E','#0984E3','#E17055','#00CEC9','#A29BFE','#FF6B6B','#1DD1A1','#F368E0','#54A0FF','#FF9F43','#5F27CD','#01A3A4','#C44569'] },
+  },
+
+  // 기본색에서 명도 단계 팔레트 생성 (16색)
+  _generatePalette(hex) {
+    // hex → RGB
+    var r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16);
+    var colors = [];
+    // 진한 것부터 연한 것까지 16단계
+    for (var i = 0; i < 16; i++) {
+      var t = i / 15; // 0 (원색) → 1 (거의 흰색)
+      var mix = 0.15 + t * 0.75; // 0.15 ~ 0.9 (흰색 혼합 비율)
+      var nr = Math.round(r + (255 - r) * mix);
+      var ng = Math.round(g + (255 - g) * mix);
+      var nb = Math.round(b + (255 - b) * mix);
+      // 처음 몇 개는 원색보다 약간 어둡게
+      if (i < 3) {
+        var dark = 1 - (i * 0.08);
+        nr = Math.round(r * dark + (255 - r) * (i * 0.05));
+        ng = Math.round(g * dark + (255 - g) * (i * 0.05));
+        nb = Math.round(b * dark + (255 - b) * (i * 0.05));
+      }
+      colors.push('#' + [nr,ng,nb].map(function(v) { return Math.max(0, Math.min(255, v)).toString(16).padStart(2,'0'); }).join(''));
+    }
+    return colors;
+  },
+
+  // 팔레트 키로 색상 배열 가져오기
+  getPaletteColors(key) {
+    var p = this.PALETTES[key || 'purple'];
+    if (!p) p = this.PALETTES.purple;
+    if (p.colors) return p.colors;
+    return this._generatePalette(p.base);
+  },
+
+  SERIES: ['#4C1D95','#6C5CE7','#8B5CF6','#A78BFA','#C4B5FD','#DDD6FE','#7C3AED','#5B21B6','#9B8CF8','#B0A8FF','#6D28D9','#4F46E5','#7B6BF0','#9488FA','#ADA4FC','#C6BFFE'],
+  DONUT: ['#4C1D95','#6C5CE7','#8B5CF6','#A78BFA','#C4B5FD','#DDD6FE','#7C3AED','#5B21B6','#9B8CF8','#B0A8FF','#6D28D9','#4F46E5','#7B6BF0','#9488FA','#ADA4FC','#C6BFFE'],
 
   KINDS: {
     line:          { label: '라인 차트',   icon: '📈', category: 'trend' },

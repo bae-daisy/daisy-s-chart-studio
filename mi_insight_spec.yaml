@@ -1,0 +1,723 @@
+swagger: "2.0"
+info:
+  title: MobileIndex Insight API
+  version: "v1"
+  description: |
+    ##### 인증
+    ```
+    Authorization: Bearer {API_KEY_TOKEN}
+    ```
+    ###### API_KEY_TOKEN
+    - 계정 정보를 AES256-CBC로 암호화한다. (계정 정보와 암호키는 별도 파일로 전달)
+    - AES256-CBC(USER_ID:USER_PW)
+  contact:
+    name: API Support
+    email: dmp_platform@igaworks.com
+host: data.mobileindex.com
+basePath: /v1/insight
+schemes:
+  - "https"
+tags:
+  - name: chart
+    description: MI CHART
+  - name: usage
+    description: 사용량 인덱스
+  - name: apps
+    description: 앱 상세
+  - name: common
+    description: 공통
+security:
+- ApiKeyAuth: [read, write]
+paths:
+  /chart/top/usage:
+    get:
+      tags:
+        - chart
+      summary: 통합 순위 >  사용자 수 순위
+      description: 최신 데이터는 D-3일이며 당일 정오 전후에 D-3 데이터 조회가 가능합니다.
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appTypeContainsAll'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/chart_usage_rank.yaml#/ChartUsageRank'
+  /chart/top/revenue:
+    get:
+      tags:
+        - chart
+      summary: 통합 순위 > 매출 순위
+      description: 최신 데이터는 D-3일이며 당일 정오 전후에 D-3 데이터 조회가 가능합니다.
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appTypeContainsAll'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/chart_top_revenue.yaml#/RevenueRank'
+  /chart/market/rank:
+    get:
+      tags:
+        - chart
+      summary: 일간 마켓별 순위 (대한민국)
+      description: 최신 데이터는 당일 정오 전후에 적재된 후 조회가 가능합니다.
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/market'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateDaily'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/rankType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/chart_market_rank.yaml#/MarketRank'
+  /chart/market/global-rank:
+    get:
+      tags:
+        - chart
+      summary: 일간 마켓별 순위 (글로벌)
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateDaily'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/countryGlobal'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/marketGlobal'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/rankType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/chart_market_global_rank.yaml#/MarketGlobalRank'
+  /chart/market/realtime-rank:
+    get:
+      tags:
+        - chart
+      summary: 실시간 마켓별 순위
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/countryRealtime'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/marketGlobal'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/rankType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/chart_market_real_time_rank.yaml#/RealTimeMarketRank'
+  /usage/usage-rank:
+    get:
+      tags:
+        - usage
+      summary: "[겸용] 업종 사용량 순위"
+      description: |
+        - MI CHART > 업종 사용량 순위
+        - 사용량 인덱스 > 업종 사용량 순위
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/uType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateMain'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_usage_rank.yaml#/UsageIndexRank'
+  /usage/demographic:
+    get:
+      tags:
+        - usage
+      summary: 사용량 순위 > 데모그래픽 사용량 순위
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateMain'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional10'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_demographics.yaml#/Demographics'
+  /usage/trend/traffic:
+    get:
+      tags:
+        - usage
+      summary: 업종 트렌드 분석 > 업종 트래픽 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/trafficType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgNameOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_trend_traffic.yaml#/TrendTraffics'
+  /usage/trend/user:
+    get:
+      tags:
+        - usage
+      summary: 업종 트렌드 분석 > 업종 데모그래픽 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/uTypeTrendUser'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgNameOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_trend_user.yaml#/TrendUsers'
+  /usage/trend/rank:
+    get:
+      tags:
+        - usage
+      summary: 업종 트렌드 분석 > 업종 순위 변동 트렌드
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/usageRankType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateFirstDayOfMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_trend_rank.yaml#/TrendRank'
+  /usage/trend/top:
+    get:
+      tags:
+        - usage
+      summary: 업종 트렌드 분석 > 업종별 상위 앱 비교
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_trend_top.yaml#/TrendTop'
+  /usage/trend/os:
+    get:
+      tags:
+        - usage
+      summary: 업종 트렌드 분석 > 업종별 OS 비교
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgNameOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_trend_os.yaml#/TrendOS'
+  /usage/rise-rank:
+    get:
+      tags:
+        - usage
+      summary: 급상승 분석 > 급상승 순위
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/uTypeUserTime'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateMain'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_rise_rank.yaml#/TrendRiseRank'
+  /usage/overlap-rank:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 동시 사용 앱 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/date'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateMain'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateSub'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startRankOptional'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endRankOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_overlap_rank.yaml#/UsageOverlapRank'
+  /usage/app/concurrent:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 충성 고객 분석 > 사용 앱 수별 분포
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_concurrent.yaml#/UsageAppConcurrent'
+  /usage/app/involvement:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 충성 고객 분석 > 관여도별 분포
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appInvolvementType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_Involvement.yaml#/UsageAppInvolvement'
+  /usage/app/break:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 이탈 고객 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateTypeMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            $ref: '/static/spec/insight/usage_index_app_break.yaml#/UsageAppBreak'
+  /usage/app/interest:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 내 고객 특성 분석 > 관심 업종 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_interest.yaml#/UsageAppInterest'
+  /usage/app/persona:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 내 고객 특성 분석 > 페르소나 분석 (절대값)
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_persona.yaml#/UsageAppPersona'
+  /usage/app/persona-relative:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 내 고객 특성 분석 > 페르소나 분석 (상대값)
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_persona_relative.yaml#/UsageAppPersonaRelative'
+  /usage/app/region:
+    get:
+      tags:
+        - usage
+      summary: 내 앱 심화 분석 > 내 고객 특성 분석 > 지역 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/regionType'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_region.yaml#/UsageAppRegion'
+  /usage/competitor/install-delete:
+    get:
+      tags:
+        - usage
+      summary: 경쟁앱 비교 분석 > 리텐션 비교 분석 > 신규 설치 건 삭제율
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_race_install_delete.yaml#/UsageRaceInstallDelete'
+  /usage/competitor/loyalty:
+    get:
+      tags:
+        - usage
+      summary: 경쟁앱 비교 분석 > 충성도 비교 분석 > 성별, 연령별 충성도 비교
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateMonth'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_app_loyalty.yaml#/UsageAppLoyalty'
+  /usage/retention:
+    get:
+      tags:
+        - usage
+      summary: 경쟁앱 비교 분석 > 리텐션 비교 분석 > 신규 설치 건 재방문율
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDateWeekly'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDateWeekly'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/usage_index_race_retention.yaml#/UsageRaceRetention'
+  /apps/summary:
+    get:
+      tags:
+        - apps
+      summary: 앱 정보 > Summary (데이터)
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_info_summary.yaml#/AppInfoSummary'
+  /apps/info:
+    get:
+      tags:
+        - apps
+      summary: 앱 정보 > Summary (기본 정보)
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_info.yaml#/CommonAppInfo'
+  /apps/ranking-history:
+    get:
+      tags:
+        - apps
+      summary: 앱 정보 > 마켓별 순위 히스토리
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDateDaily'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDateDaily'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/market'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgNameMarket'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/rankType'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_ranking_history.yaml#/RankingHistory'
+  /apps/market-info:
+    get:
+      tags:
+        - apps
+      summary: 앱 정보 > Summary (마켓 기본 정보)
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_market_info.yaml#/AppMarketInfo'
+  /apps/timeline:
+    get:
+      tags:
+        - apps
+      summary: 마켓 정보 > 성과 분석 > 타임라인 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/tType'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_timeline.yaml#/AppTimeline'
+  /apps/rate-total:
+    get:
+      tags:
+        - apps
+      summary: 마켓 정보 > 성과 분석 > 평점 (Total)
+      description: 구글 플레이 평점 Total
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_rate_total.yaml#/AppRateTotal'
+  /apps/rate:
+    get:
+      tags:
+        - apps
+      summary: 마켓 정보 > 성과 분석 > 평점
+      description: 기간별 구글 플레이 평점 조회
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_rate.yaml#/AppRate'
+  /apps/usage:
+    get:
+      tags:
+        - apps
+      summary: 사용량 정보 > 기본 사용량 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/uTypeApps'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_usage.yaml#/AppUsage'
+  /apps/demographic:
+    get:
+      tags:
+        - apps
+      summary: 사용량 정보 > 데모그래픽 분석
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/os'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appsDemographicType'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_demographic.yaml#/AppDemographics'
+  /apps/ranking:
+    get:
+      tags:
+        - apps
+      summary: 사용량 정보 > 순위 히스토리
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/usageRankType'
+#        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/bizCateTypeContainsAll'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_ranking.yaml#/AppUsageRank'
+  /apps/biz-rate:
+    get:
+      tags:
+        - apps
+      summary: 사용량 정보 > 점유율 히스토리
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/pkgName'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/dateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/startDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/endDate'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/gender'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/age'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/bizCateType'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/bizRateType'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/apps_biz_rate.yaml#/AppBizRate'
+  /common/search:
+    get:
+      tags:
+        - common
+      summary: 앱 검색
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/keywordApp'
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/viewCntOptional'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/common_search.yaml#/CommonAppSearch'
+  /common/cate-main:
+    get:
+      tags:
+        - common
+      summary: 업종 대분류 검색
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/common_category_main.yaml#/CommonBizCategoryMain'
+  /common/cate-sub:
+    get:
+      tags:
+        - common
+      summary: 업종 소분류 검색
+      parameters:
+        - $ref: '/static/spec/insight/_parameters.yaml#/parameters/appCateMain'
+      responses:
+        "200":
+          description: 요청 성공
+          schema:
+            type: array
+            items:
+              $ref: '/static/spec/insight/common_category_sub.yaml#/CommonBizCategory'
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    description: >-
+      format: "Bearer {API_KEY_TOKEN}"
+    name: Authorization
+    in: header

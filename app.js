@@ -1590,6 +1590,29 @@
 
     if (oldChart) oldChart.replaceWith(newEl);
 
+    // 깨진 아이콘 이미지 감지 → 플레이스홀더로 교체
+    setTimeout(() => {
+      const images = newEl.querySelectorAll('svg image');
+      images.forEach(img => {
+        const testImg = new Image();
+        testImg.onload = () => {
+          if (testImg.naturalWidth < 2 || testImg.naturalHeight < 2) replaceBroken(img);
+        };
+        testImg.onerror = () => replaceBroken(img);
+        testImg.src = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+        function replaceBroken(imgEl) {
+          const cx = parseFloat(imgEl.getAttribute('x')) + parseFloat(imgEl.getAttribute('width')) / 2;
+          const cy = parseFloat(imgEl.getAttribute('y')) + parseFloat(imgEl.getAttribute('height')) / 2;
+          const r = parseFloat(imgEl.getAttribute('width')) / 2;
+          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.innerHTML = '<title>아이콘 이미지 로드 실패</title>' +
+            '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#F3F0FF" stroke="#E5E1F0" stroke-width="1.5" style="cursor:help"/>' +
+            '<text x="' + cx + '" y="' + (cy + r * 0.35) + '" text-anchor="middle" font-size="' + (r * 0.9) + '" fill="#8B7FC7" font-weight="600" style="cursor:help">?</text>';
+          imgEl.parentNode.replaceChild(g, imgEl);
+        }
+      });
+    }, 500);
+
     // 드롭다운 트리거 텍스트 동기화
     const trigger = chartArea.querySelector('.kd-trigger');
     if (trigger) {

@@ -601,16 +601,23 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// ── 정적 파일 서빙 (프론트엔드 파일) — API 라우트 뒤에 배치 ──
-app.use(express.static(path.join(__dirname), {
-  index: 'index.html',
-  extensions: ['html'],
-  etag: false,
-  lastModified: false,
-  setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-  }
-}));
+// ── 정적 파일 서빙: localhost에서만 허용, 배포 환경에서는 API 전용 ──
+if (!process.env.RENDER) {
+  app.use(express.static(path.join(__dirname), {
+    index: 'index.html',
+    extensions: ['html'],
+    etag: false,
+    lastModified: false,
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+  }));
+} else {
+  // Render 배포 환경: API 전용, 루트 접속 시 안내 메시지
+  app.get('/', (_req, res) => {
+    res.json({ status: 'ok', message: 'Chart Studio API Server' });
+  });
+}
 
 // ── 서버 시작 ──
 app.listen(PORT, () => {

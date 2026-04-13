@@ -2807,3 +2807,110 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   border-top: 1px solid #f0f0f0;
   text-align: center;
 }
+.isp-retry-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #a89be0;
+  line-height: 1.4;
+}
+.isp-retry-btn {
+  margin-top: 8px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #6C5CE7;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+}
+.isp-retry-btn:hover {
+  background: #5B4BD6;
+}
+
+/* ── 앱명 변경 모달 ── */
+.rename-modal {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  width: 420px;
+  max-width: 90vw;
+  max-height: 70vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.rename-modal-header {
+  padding: 16px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  border-bottom: 1px solid #f0f0f0;
+}
+.rename-modal-list {
+  padding: 12px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rename-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rename-orig {
+  font-size: 11px;
+  color: #999;
+  min-width: 60px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rename-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.rename-input:focus {
+  border-color: #6C5CE7;
+}
+.rename-modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.rename-cancel {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.rename-cancel:hover { background: #f5f5f5; }
+.rename-apply {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #6C5CE7;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.rename-apply:hover { background: #5B4BD6; }

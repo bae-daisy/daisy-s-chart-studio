@@ -1075,15 +1075,16 @@ const SvgCharts = {
       // 원 배경 (흰색)
       svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#FFFFFF" stroke="${T.divider}" stroke-width="1.5"/>`;
 
-      if (p.pkg || p.iconUrl) {
-        const clipId = `clip-${i}-${Date.now()}`;
-        let iconUrl = p.iconUrl || SvgCharts._appIcon(p.pkg);
-        // URL 검증: http(s), data:image, 또는 로컬 상대경로(icons/)만 허용
-        if (iconUrl && !/^(https?:\/\/|data:image\/|icons\/)/i.test(iconUrl)) iconUrl = '';
-        if (iconUrl) {
-          svg += `<defs><clipPath id="${clipId}"><circle cx="${cx}" cy="${cy}" r="${r - 2}"/></clipPath></defs>`;
-          svg += `<image href="${iconUrl}" x="${cx - r + 2}" y="${cy - r + 2}" width="${(r-2)*2}" height="${(r-2)*2}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice" onerror="this.style.display='none'"/>`;
-        }
+      // 아이콘: pkg, iconUrl, 또는 앱 이름(label)으로 검색
+      const clipId = `clip-${i}-${Date.now()}`;
+      let iconUrl = p.iconUrl || SvgCharts._appIcon(p.pkg) || SvgCharts._appIcon(p.label);
+      // URL 검증: http(s), data:image, 로컬 상대경로(icons/), 또는 raw 프록시만 허용
+      if (iconUrl && !/^(https?:\/\/|data:image\/|icons\/|\/api\/icon\?)/i.test(iconUrl)) iconUrl = '';
+      if (iconUrl) {
+        svg += `<defs><clipPath id="${clipId}"><circle cx="${cx}" cy="${cy}" r="${r - 2}"/></clipPath></defs>`;
+        svg += `<image href="${iconUrl}" x="${cx - r + 2}" y="${cy - r + 2}" width="${(r-2)*2}" height="${(r-2)*2}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice" onerror="this.style.display='none'"/>`;
+      } else if (SvgCharts._showAppIcons !== false && p.label && p.label.length >= 2) {
+        svg += this._iconSpinner(cx, cy, r - 2);
       }
     });
 
@@ -1287,7 +1288,8 @@ const SvgCharts = {
       'Watcha': 'icons/watcha.png',
     };
     var cached = this._iconCache[nameOrPkg];
-    return map[nameOrPkg] || (cached && cached !== 'none' ? cached : '') || '';
+    var validCached = (cached && cached !== 'none' && (cached.startsWith('data:') || cached.startsWith('icons/') || (cached.includes('/api/icon?') && cached.includes('raw=1')))) ? cached : '';
+    return map[nameOrPkg] || validCached || '';
   },
 
   // 아이콘이 없는 것으로 확정된 앱인지 확인
@@ -1345,26 +1347,31 @@ const SvgCharts = {
     });
 
     try {
-      // 배치 API로 한 번에 요청
-      let resp = await fetch(ApiClient.BASE_URL + '/search-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords })
-      });
-      if (!resp.ok) {
-        await new Promise(r => setTimeout(r, 3000));
-        resp = await fetch(ApiClient.BASE_URL + '/search-batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keywords })
-        });
+      // 3개씩 나눠서 순차 요청
+      const CHUNK = 3;
+      const allResults = {};
+      for (let i = 0; i < keywords.length; i += CHUNK) {
+        const chunk = keywords.slice(i, i + CHUNK);
+        try {
+          const resp = await fetch(ApiClient.BASE_URL + '/search-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keywords: chunk })
+          });
+          if (resp.ok) {
+            const json = await resp.json();
+            Object.assign(allResults, json.data || {});
+          }
+        } catch(e) { /* 청크 실패 무시, 다음 청크 계속 */ }
+        // 진행 콜백
+        if (this._onIconProgress) {
+          const done = Math.min(i + CHUNK, keywords.length);
+          this._onIconProgress(done, keywords.length, allResults);
+        }
       }
-      if (resp.ok) {
-        const json = await resp.json();
-        const results = json.data || {};
-        console.log('[아이콘] 검색 키워드:', keywords, '응답 키:', Object.keys(results));
-        for (const [kw, names] of Object.entries(kwMap)) {
-          const list = results[kw];
+      console.log('[아이콘] 검색 키워드:', keywords, '응답 키:', Object.keys(allResults));
+      for (const [kw, names] of Object.entries(kwMap)) {
+        const list = allResults[kw];
           console.log('[아이콘]', kw, '→', list ? list.length + '개 결과' : '결과 없음');
           names.forEach(name => {
             if (!list || list.length === 0) {
@@ -1374,8 +1381,7 @@ const SvgCharts = {
             if (app) {
               // base64 아이콘 우선, 없으면 프록시 URL
               const iconB64 = app.iconBase64 || '';
-              const iconUrl = app.iconUrl || app.icon_url || '';
-              const finalIcon = iconB64 || (iconUrl ? ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl) : '');
+              const finalIcon = iconB64;
               if (finalIcon) {
                 console.log('[아이콘] ✅', name, '→', finalIcon.startsWith('data:') ? 'base64(' + finalIcon.length + ')' : finalIcon.slice(0, 60));
                 this._iconCache[name] = finalIcon;
@@ -1392,7 +1398,6 @@ const SvgCharts = {
           });
         }
         try { localStorage.setItem('cs-icon-cache', JSON.stringify(this._iconCache)); } catch(e) {}
-      }
     } catch(e) { /* 무시 */ }
   },
   // ── 아이콘 크기/모양 유틸리티 ──

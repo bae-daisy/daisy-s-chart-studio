@@ -153,12 +153,13 @@
       exitTextEditMode(chartArea, svgEl, btn);
     });
 
-    // SVG 텍스트에 호버/클릭 이벤트
-    const texts = svgEl.querySelectorAll('text');
+    // SVG 텍스트에 호버/클릭 이벤트 (아이콘 관련 텍스트 제외)
+    const texts = svgEl.querySelectorAll('text:not([data-icon-text])');
     const preventDrag = (e) => { e.preventDefault(); };
     svgEl.addEventListener('mousedown', preventDrag);
     svgEl._preventDrag = preventDrag;
     texts.forEach(t => {
+      if (t.closest('[data-icon-reload]')) return;
       t.style.cursor = 'pointer';
       t.style.userSelect = 'none';
       t.style.webkitUserSelect = 'none';
@@ -216,7 +217,7 @@
     e.stopPropagation();
     const t = e.target.closest('text');
     if (!t) return;
-    const chartArea = t.closest('.slide-chart-area');
+    const chartArea = e._chartArea || t.closest('.slide-chart-area');
     if (!chartArea) return;
 
     // 기존 오버레이 제거
@@ -236,9 +237,10 @@
     input.className = 'text-edit-input';
     input.value = t.textContent;
 
-    // 위치/크기 맞추기
-    const relTop = tRect.top - svgRect.top;
-    const relLeft = tRect.left - svgRect.left;
+    // 위치/크기 맞추기 (chartArea 기준)
+    const areaRect = chartArea.getBoundingClientRect();
+    const relTop = tRect.top - areaRect.top;
+    const relLeft = tRect.left - areaRect.left;
     overlay.style.top = relTop + 'px';
     overlay.style.left = relLeft + 'px';
     overlay.style.width = Math.max(tRect.width + 24, 60) + 'px';
@@ -252,7 +254,8 @@
     input.style.textAlign = t.getAttribute('text-anchor') === 'end' ? 'right' : t.getAttribute('text-anchor') === 'middle' ? 'center' : 'left';
 
     overlay.appendChild(input);
-    chartArea.querySelector('.chart-slide').appendChild(overlay);
+    // chartArea에 추가 (chart-slide의 overflow:hidden에 잘리지 않도록)
+    chartArea.appendChild(overlay);
 
     input.focus();
     input.select();
@@ -287,26 +290,46 @@
         const inp = wrapper.querySelector('.ie-input[data-key="source"]');
         if (inp) inp.value = slide.source;
       } else {
-        // 범례 또는 기타 텍스트 수정 → legendNames에 저장 후 리렌더
+        // 범례 또는 데이터 라벨 텍스트 수정
         const origText = _origTextBeforeEdit;
-        // 원본 시리즈 이름 찾기: legendNames의 값이거나 헤더에 있는 이름
         if (!slide.legendNames) slide.legendNames = {};
+        if (!slide.labelNames) slide.labelNames = {};
         const parsed = slide.parsed || {};
         const headers = parsed.headers || [];
-        // 수정 전 텍스트가 legendNames의 값인지 확인
-        let origSeriesName = null;
-        for (const [k, v] of Object.entries(slide.legendNames)) {
-          if (v === origText || v === input.value) { origSeriesName = k; break; }
+        const data = parsed.data || [];
+
+        // scatter/flowCard 등에서 데이터 라벨(앱명) 수정 감지
+        // parsed.data에서 origText와 일치하는 셀을 찾아 직접 변경
+        let isDataLabel = false;
+        for (let ri = 0; ri < data.length; ri++) {
+          for (let ci = 0; ci < Math.min(data[ri].length, 2); ci++) {
+            if (String(data[ri][ci]).trim() === origText) {
+              data[ri][ci] = input.value;
+              isDataLabel = true;
+              break;
+            }
+          }
+          if (isDataLabel) break;
         }
-        // legendNames에 없으면 헤더에서 찾기
-        if (!origSeriesName) {
-          origSeriesName = headers.find(h => h === origText) || origText;
+
+        if (isDataLabel) {
+          // 데이터 라벨 변경 → labelNames에 저장 + 리렌더
+          slide.labelNames[origText] = input.value;
+          rerenderChart(slide, wrapper);
+        } else {
+          // 범례 텍스트 수정 → legendNames에 저장
+          let origSeriesName = null;
+          for (const [k, v] of Object.entries(slide.legendNames)) {
+            if (v === origText || v === input.value) { origSeriesName = k; break; }
+          }
+          if (!origSeriesName) {
+            origSeriesName = headers.find(h => h === origText) || origText;
+          }
+          if (origSeriesName && input.value !== origSeriesName) {
+            slide.legendNames[origSeriesName] = input.value;
+          }
+          rerenderChart(slide, wrapper);
         }
-        if (origSeriesName && input.value !== origSeriesName) {
-          slide.legendNames[origSeriesName] = input.value;
-        }
-        // 칩 크기 재계산을 위해 리렌더
-        rerenderChart(slide, wrapper);
       }
       saveProject();
     };
@@ -1182,6 +1205,7 @@
               }).join('')}
             </div>
           </div>
+          <button class="st-btn rename-apps-btn" title="앱 이름 변경">📝 앱명</button>
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
@@ -1242,6 +1266,7 @@
         localStorage.setItem('cs-dblhint-dismissed', '1');
       });
     }
+    // 캡처 단계에서 등록하여 자식 요소의 stopPropagation에 영향받지 않음
     chartArea.addEventListener('dblclick', e => {
       e.preventDefault();
       window.getSelection().removeAllRanges();
@@ -1253,7 +1278,7 @@
       const pt = svgEl.createSVGPoint();
       pt.x = e.clientX; pt.y = e.clientY;
       const svgPt = pt.matrixTransform(svgEl.getScreenCTM().inverse());
-      const texts = Array.from(svgEl.querySelectorAll('text'));
+      const texts = Array.from(svgEl.querySelectorAll('text')).filter(t => !t.hasAttribute('data-icon-text') && !t.closest('[data-icon-reload]'));
       let closest = null, closestDist = Infinity;
       texts.forEach(t => {
         try {
@@ -1274,7 +1299,7 @@
       });
       if (closest) {
         svgEl.style.pointerEvents = 'auto';
-        textClick({ stopPropagation(){}, target: closest });
+        textClick({ stopPropagation(){}, target: closest, _chartArea: chartArea });
         slide._dblFailCount = 0;
       } else {
         slide._dblFailCount = (slide._dblFailCount || 0) + 1;
@@ -1283,7 +1308,7 @@
           slide._dblFailCount = 0;
         }
       }
-    });
+    }, true);  // capture: true — 자식 요소의 stopPropagation 무시
 
     // 드래그 시도 감지 → 텍스트 수정 안내 토스트
     let _dragAttempts = 0;
@@ -1426,6 +1451,71 @@
         return;
       }
 
+      // 앱명 변경
+      if (btn.classList.contains('rename-apps-btn')) {
+        e.stopPropagation();
+        const parsed = slide.parsed || {};
+        const headers = parsed.headers || [];
+        const data = parsed.data || [];
+        if (!slide.labelNames) slide.labelNames = {};
+        if (!slide.legendNames) slide.legendNames = {};
+        // 앱 이름 후보 추출: 헤더(열 이름) + 데이터 첫 열
+        const appNames = [];
+        const _skipRe = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고|기간|구분|항목|합계|평균|증감|D|W|M)$/;
+        const _notApp = /^(이탈|유입|유지|경쟁앱|총\s|전체|사용자|사용량|신규|기존|순위|점유율|증감|1인당|월평균|일평균|사용시간|사용일|활성|설치|삭제|재방문|점유|매출|다운로드|업종|트래픽)/;
+        headers.slice(1).forEach(h => { if (h && !_skipRe.test(h) && !_notApp.test(h) && !/^[\d,.%\-+]+$/.test(h)) appNames.push(h); });
+        data.forEach(r => {
+          const s = String(r[0] || '').trim();
+          if (s && s.length >= 2 && s.length <= 60 && !/^[\d,.%\-+]+$/.test(s) && !_skipRe.test(s) && !_notApp.test(s) && !/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*){2,}$/i.test(s)) {
+            if (!appNames.includes(s)) appNames.push(s);
+          }
+        });
+        if (appNames.length === 0) { showToast('변경할 앱 이름이 없어요'); return; }
+        // 모달 생성
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = '<div class="rename-modal">' +
+          '<div class="rename-modal-header">📝 앱 이름 변경</div>' +
+          '<div class="rename-modal-list">' +
+          appNames.map((n, i) => {
+            const current = slide.labelNames[n] || slide.legendNames[n] || n;
+            return '<div class="rename-row"><span class="rename-orig">' + _h(n) + '</span>' +
+              '<input class="rename-input" data-orig="' + _h(n) + '" value="' + _h(current) + '" spellcheck="false"></div>';
+          }).join('') +
+          '</div>' +
+          '<div class="rename-modal-footer"><button class="rename-cancel">취소</button><button class="rename-apply">적용</button></div>' +
+          '</div>';
+        document.body.appendChild(modal);
+        requestAnimationFrame(() => modal.classList.add('open'));
+        modal.querySelector('.rename-cancel').addEventListener('click', () => { modal.classList.remove('open'); setTimeout(() => modal.remove(), 250); });
+        modal.addEventListener('click', ev => { if (ev.target === modal) { modal.classList.remove('open'); setTimeout(() => modal.remove(), 250); } });
+        modal.querySelector('.rename-apply').addEventListener('click', () => {
+          let changed = false;
+          modal.querySelectorAll('.rename-input').forEach(inp => {
+            const orig = inp.dataset.orig;
+            const val = inp.value.trim();
+            if (val && val !== orig) {
+              // parsed.data에서 직접 변경
+              data.forEach(r => { if (String(r[0]).trim() === orig) r[0] = val; });
+              // 헤더에서도 변경
+              const hi = headers.indexOf(orig);
+              if (hi >= 0) headers[hi] = val;
+              slide.labelNames[orig] = val;
+              slide.legendNames[orig] = val;
+              changed = true;
+            }
+          });
+          modal.classList.remove('open');
+          setTimeout(() => modal.remove(), 250);
+          if (changed) { rerenderChart(slide, wrapper); saveProject(); }
+        });
+        // Enter로 적용
+        modal.querySelectorAll('.rename-input').forEach(inp => {
+          inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') modal.querySelector('.rename-apply').click(); });
+        });
+        return;
+      }
+
       // 설정
       if (btn.classList.contains('edit-btn')) {
         e.stopPropagation();
@@ -1502,17 +1592,27 @@
       const headers = parsed.headers || [];
       const data = parsed.data || [];
       const meta = parsed.meta || {};
-      const _skip = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고|이탈|유입|유지|사용자|사용량|기간|구분|항목|합계|평균|증감|D|W|M)$/;
-      const _notAppName = /^(이탈|유입|유지|경쟁앱|총\s|전체|사용자|사용량|신규|기존|순위|점유율|증감)/;
+      const _skip = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고|이탈|유입|유지|사용자|사용량|기간|구분|항목|합계|평균|증감|패키지명?|패키지|D|W|M)$/;
+      const _notAppName = /^(이탈|유입|유지|경쟁앱|총\s|전체|사용자|사용량|신규|기존|순위|점유율|증감|1인당|월평균|일평균|평균\s|사용시간|사용일|활성|설치|삭제|재방문|점유|매출|다운로드|업종|트래픽|Android|iOS|android|ios|day\+|day\s|week|month|rate|rank|cnt|비율|건수|횟수|시간|일수|개월|점수)/i;
       const names = [];
-      // 헤더(열 이름)에서 앱 이름 추출
-      headers.slice(1).forEach(h => { if (h && !_skip.test(h) && !_notAppName.test(h)) names.push(h); });
-      // 첫 번째/두 번째 열(행 라벨, 앱명)에서 앱 이름 추출
-      data.forEach(r => {
-        [0, 1].forEach(ci => {
-          const s = String(r[ci] || '').trim();
-          if (s && s.length >= 2 && s.length <= 40 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s) && !_notAppName.test(s)) names.push(s);
+      // scatter/bubble 차트는 헤더가 지표 이름이므로 헤더에서 앱 이름 추출하지 않음
+      // 대신 앱 이름 열을 정확히 찾아서 데이터에서 추출
+      if (slide.chartKind === 'scatter' || slide.chartKind === 'bubble') {
+        const nameIdx = headers.findIndex(h => /앱|이름|app/i.test(h));
+        const ni = nameIdx >= 0 ? nameIdx : 0;
+        data.forEach(r => {
+          const s = String(r[ni] || '').trim();
+          if (s && s.length >= 2 && !/^[\d,.%\-+]+$/.test(s)) names.push(s);
         });
+      } else {
+        // 헤더에서 앱 이름 추출 — 지표/단위 키워드가 포함된 헤더 제외
+        const _headerNotApp = /(\d+인당|월평균|일평균|사용시간|사용일|사용량|점유율|증감|비율|건수|횟수|패키지|package|pkg|day\+|week|month|rate|rank|cnt)/i;
+        headers.slice(1).forEach(h => { if (h && !_skip.test(h) && !_notAppName.test(h) && !_headerNotApp.test(h)) names.push(h); });
+      }
+      // 첫 번째 열(행 라벨/앱명)에서 앱 이름 추출
+      data.forEach(r => {
+        const s = String(r[0] || '').trim();
+        if (s && s.length >= 2 && s.length <= 60 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s) && !_notAppName.test(s) && !/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*){2,}$/i.test(s)) names.push(s);
       });
       if (meta.appName) names.push(meta.appName.replace('내 앱:', '').trim());
       const unique = [...new Set(names)].filter(n => n && !SvgCharts._appIcon(n));
@@ -1528,16 +1628,26 @@
         panel.querySelector('.isp-close').addEventListener('click', () => panel.remove());
 
         const startTime = Date.now();
-        const statusInterval = setInterval(() => {
-          const elapsed = Math.round((Date.now() - startTime) / 1000);
-          const footer = panel.querySelector('.isp-footer');
-          if (elapsed < 5) footer.textContent = '서버 요청 중...';
-          else if (elapsed < 15) footer.textContent = '서버 응답 대기 중... (' + elapsed + '초)';
-          else footer.textContent = '서버 깨우는 중... (' + elapsed + '초)';
-        }, 1000);
+        const footer = panel.querySelector('.isp-footer');
+        footer.textContent = '서버 요청 중...';
+
+        // 청크별 진행 콜백
+        SvgCharts._onIconProgress = (done, total, results) => {
+          footer.textContent = '검색 중... (' + done + '/' + total + '개 키워드 완료)';
+          // 이미 결과가 온 앱 상태 업데이트
+          unique.forEach(n => {
+            if (!SvgCharts._appIcon(n)) return;
+            const item = panel.querySelector('.isp-item[data-name="' + CSS.escape(n) + '"]');
+            if (!item || item.classList.contains('isp-done')) return;
+            item.querySelector('.isp-icon').textContent = '✅';
+            item.querySelector('.isp-status').textContent = '완료';
+            item.classList.add('isp-done');
+          });
+          rerenderChart(slide, wrapper);
+        };
 
         SvgCharts.preloadAppIcons(unique).then(() => {
-          clearInterval(statusInterval);
+          SvgCharts._onIconProgress = null;
           // 각 앱 상태 업데이트
           unique.forEach(n => {
             const item = panel.querySelector('.isp-item[data-name="' + CSS.escape(n) + '"]');
@@ -1559,13 +1669,11 @@
               applyBtn.addEventListener('click', () => {
                 const url = urlInput.value.trim();
                 if (!url) return;
-                // URL이면 프록시 경유, data:면 직접 사용
-                if (url.startsWith('data:')) {
+                if (url.startsWith('data:') || url.startsWith('icons/')) {
                   SvgCharts._iconCache[n] = url;
-                } else if (url.startsWith('http')) {
-                  SvgCharts._iconCache[n] = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(url);
                 } else {
-                  SvgCharts._iconCache[n] = url;
+                  // 외부 URL은 직접 캐시하지 않음 — raw 프록시로 SVG에서 사용 가능
+                  SvgCharts._iconCache[n] = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(url) + '&raw=1';
                 }
                 try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
                 iconEl.textContent = '✅';
@@ -1579,11 +1687,63 @@
           });
           const footer = panel.querySelector('.isp-footer');
           const loaded = unique.filter(n => SvgCharts._appIcon(n)).length;
-          footer.textContent = loaded + '/' + unique.length + '개 완료' + (loaded < unique.length ? ' — 실패한 앱은 URL을 직접 입력할 수 있어요' : '');
+          const failed = unique.length - loaded;
+          if (failed > 0) {
+            footer.innerHTML = loaded + '/' + unique.length + '개 완료 — 실패한 앱은 URL을 직접 입력할 수 있어요' +
+              '<div class="isp-retry-hint">💡 한꺼번에 여러 앱 아이콘을 불러오면 일부가 실패할 수 있어요</div>' +
+              '<button class="isp-retry-btn">🔄 다시 로드</button>';
+            footer.querySelector('.isp-retry-btn').addEventListener('click', () => {
+              const failedNames = unique.filter(n => !SvgCharts._appIcon(n));
+              if (failedNames.length === 0) { footer.textContent = '모든 아이콘이 로드되었어요'; return; }
+              failedNames.forEach(n => { delete SvgCharts._iconCache[n]; });
+              try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+              footer.innerHTML = '🔄 다시 로드 중...';
+              // 패널 내 실패 항목 상태 초기화
+              failedNames.forEach(n => {
+                const item = panel.querySelector('.isp-item[data-name="' + CSS.escape(n) + '"]');
+                if (!item) return;
+                item.querySelector('.isp-icon').textContent = '⏳';
+                item.querySelector('.isp-status').textContent = '재시도 중...';
+                item.classList.remove('isp-fail', 'isp-done');
+              });
+              SvgCharts.preloadAppIcons(failedNames).then(() => {
+                failedNames.forEach(n => {
+                  const item = panel.querySelector('.isp-item[data-name="' + CSS.escape(n) + '"]');
+                  if (!item) return;
+                  if (SvgCharts._appIcon(n)) {
+                    item.querySelector('.isp-icon').textContent = '✅';
+                    item.querySelector('.isp-status').textContent = '완료';
+                    item.classList.add('isp-done');
+                  } else {
+                    item.querySelector('.isp-icon').textContent = '❌';
+                    item.querySelector('.isp-status').textContent = '실패';
+                    item.classList.add('isp-fail');
+                  }
+                });
+                const newLoaded = unique.filter(n => SvgCharts._appIcon(n)).length;
+                const newFailed = unique.length - newLoaded;
+                if (newFailed > 0) {
+                  footer.innerHTML = newLoaded + '/' + unique.length + '개 완료' +
+                    '<div class="isp-retry-hint">💡 여전히 실패한 아이콘이 있어요. 한 번 더 시도해보세요</div>' +
+                    '<button class="isp-retry-btn">🔄 다시 로드</button>';
+                  footer.querySelector('.isp-retry-btn').addEventListener('click', arguments.callee);
+                } else {
+                  footer.textContent = '✅ 모든 아이콘 로드 완료!';
+                  setTimeout(() => panel.remove(), 2000);
+                }
+                rerenderChart(slide, wrapper);
+              }).catch(() => {
+                footer.innerHTML = '⚠️ 서버 연결 실패 <button class="isp-retry-btn">🔄 다시 로드</button>';
+                footer.querySelector('.isp-retry-btn').addEventListener('click', arguments.callee);
+              });
+            });
+          } else {
+            footer.textContent = loaded + '/' + unique.length + '개 완료';
+          }
           if (loaded === unique.length) setTimeout(() => panel.remove(), 2000);
           rerenderChart(slide, wrapper);
         }).catch(() => {
-          clearInterval(statusInterval);
+          SvgCharts._onIconProgress = null;
           panel.querySelector('.isp-footer').textContent = '⚠️ 서버 연결 실패';
         });
       }
@@ -1672,8 +1832,9 @@
           const r = parseFloat(imgEl.getAttribute('width')) / 2;
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           g.setAttribute('style', 'cursor:pointer');
+          g.setAttribute('data-icon-reload', '1');
           g.innerHTML = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#F3F0FF" stroke="#E5E1F0" stroke-width="1.5"/>' +
-            '<text x="' + cx + '" y="' + (cy + r * 0.35) + '" text-anchor="middle" font-size="' + (r * 0.7) + '" fill="#8B7FC7" font-weight="600">↻</text>';
+            '<text x="' + cx + '" y="' + (cy + r * 0.35) + '" text-anchor="middle" font-size="' + (r * 0.7) + '" fill="#8B7FC7" font-weight="600" pointer-events="none" data-icon-text="1">↻</text>';
           g.addEventListener('mouseenter', (e) => showTip(e, '아이콘 로드 실패 — 클릭하면 다시 시도'));
           g.addEventListener('mouseleave', hideTip);
           g.addEventListener('click', (ev) => { ev.stopPropagation(); hideTip(); reloadIcons(); });
@@ -1686,8 +1847,10 @@
         const title = g.querySelector('title');
         if (!title || !title.textContent.includes('찾을 수 없습니다')) return;
         g.setAttribute('style', 'cursor:pointer');
+        g.setAttribute('data-icon-reload', '1');
         const match = title.textContent.match(/"(.+?)"/);
         const appName = match ? match[1] : '';
+        title.remove(); // 네이티브 툴팁 제거
         title.remove(); // 네이티브 툴팁 제거
         g.addEventListener('mouseenter', (e) => showTip(e, '"' + appName + '" 아이콘을 찾지 못했어요 — 클릭하면 다시 시도'));
         g.addEventListener('mouseleave', hideTip);
@@ -1721,6 +1884,7 @@
         hitArea.setAttribute('r', r);
         hitArea.setAttribute('fill', 'transparent');
         hitArea.setAttribute('style', 'cursor:pointer');
+        hitArea.setAttribute('data-icon-reload', '1');
         hitArea.addEventListener('mouseenter', (e) => showTip(e, '아이콘 로딩 중... 클릭하면 다시 시도'));
         hitArea.addEventListener('mouseleave', hideTip);
         hitArea.addEventListener('click', (ev) => { ev.stopPropagation(); hideTip(); reloadIcons(); });

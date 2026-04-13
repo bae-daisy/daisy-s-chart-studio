@@ -581,9 +581,17 @@ app.get('/api/icon', async (req, res) => {
 
     const contentType = imgResp.headers.get('content-type') || 'image/png';
     const buffer = Buffer.from(await imgResp.arrayBuffer());
-    const base64 = `data:${contentType};base64,${buffer.toString('base64')}`;
 
     res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    // ?raw=1 → 이미지 바이너리 직접 반환 (SVG <image href>에서 사용 가능)
+    if (req.query.raw === '1') {
+      res.setHeader('Content-Type', contentType);
+      return res.send(buffer);
+    }
+
+    // 기본: JSON 응답 (하위 호환)
+    const base64 = `data:${contentType};base64,${buffer.toString('base64')}`;
     res.json({ success: true, data: base64 });
   } catch (e) {
     res.status(502).json({ error: 'timeout' });

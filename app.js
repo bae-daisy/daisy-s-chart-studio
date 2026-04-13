@@ -1507,14 +1507,16 @@
       const names = [];
       // 헤더(열 이름)에서 앱 이름 추출
       headers.slice(1).forEach(h => { if (h && !_skip.test(h) && !_notAppName.test(h)) names.push(h); });
-      // 첫 번째 열(행 라벨)에서만 앱 이름 추출
+      // 첫 번째/두 번째 열(행 라벨, 앱명)에서 앱 이름 추출
       data.forEach(r => {
-        const s = String(r[0] || '').trim();
-        if (s && s.length >= 2 && s.length <= 30 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s) && !_notAppName.test(s)) names.push(s);
+        [0, 1].forEach(ci => {
+          const s = String(r[ci] || '').trim();
+          if (s && s.length >= 2 && s.length <= 40 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s) && !_notAppName.test(s)) names.push(s);
+        });
       });
       if (meta.appName) names.push(meta.appName.replace('내 앱:', '').trim());
       const unique = [...new Set(names)].filter(n => n && !SvgCharts._appIcon(n));
-      console.log('[아이콘 추출] names:', names, 'unique:', unique);
+      console.log('[아이콘 추출] title:', slide.title, 'headers:', headers.slice(0,5), 'data[0]:', (data[0]||[]).slice(0,5), 'names:', names, 'unique:', unique);
       if (unique.length > 0) {
         // 아이콘 상태 패널 표시
         const panel = document.createElement('div');

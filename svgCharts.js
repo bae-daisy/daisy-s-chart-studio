@@ -1247,11 +1247,11 @@ const SvgCharts = {
   _iconCache: (function() {
     try {
       var cache = JSON.parse(localStorage.getItem('cs-icon-cache') || '{}');
-      // base64, 로컬 아이콘, 'none'만 유지. 외부 URL/프록시 URL은 삭제 (깨짐 방지)
+      // base64, 로컬 아이콘만 유지. 나머지(외부 URL, 프록시 URL, 'none') 삭제
       var cleaned = false;
       for (var k in cache) {
         var v = cache[k];
-        if (v && v !== 'none' && !v.startsWith('data:') && !v.startsWith('icons/')) {
+        if (!v || v === 'none' || (!v.startsWith('data:') && !v.startsWith('icons/'))) {
           delete cache[k];
           cleaned = true;
         }
@@ -1299,7 +1299,7 @@ const SvgCharts = {
   async preloadAppIcons(appNames) {
     if (!appNames || appNames.length === 0) return;
 
-    const toFetch = appNames.filter(name => name && !this._appIcon(name) && !this._iconNotFound(name));
+    const toFetch = appNames.filter(name => name && !this._appIcon(name));
     if (toFetch.length === 0) return;
 
     // 긴 앱 이름에서 검색용 키워드 추출
@@ -1355,8 +1355,6 @@ const SvgCharts = {
           const list = results[kw];
           names.forEach(name => {
             if (!list || list.length === 0) {
-              // 검색 결과 없음 → 'none'으로 기록하여 재시도 방지
-              if (!this._iconCache[name]) this._iconCache[name] = 'none';
               return;
             }
             const app = _bestMatch(list, name);
@@ -1372,10 +1370,10 @@ const SvgCharts = {
                 const appName = app.appName || '';
                 if (appName && appName !== name) this._iconCache[appName] = finalIcon;
               } else {
-                if (!this._iconCache[name]) this._iconCache[name] = 'none';
+                // 아이콘 URL 없음 — 스킵
               }
             } else {
-              if (!this._iconCache[name]) this._iconCache[name] = 'none';
+              // 매칭 앱 없음 — 스킵
             }
           });
         }

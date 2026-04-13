@@ -1,5 +1,10 @@
 // ── 메인 앱 로직 ──
 (function() {
+  // ── Render 서버 미리 깨우기 (슬립 해제) ──
+  if (typeof ApiClient !== 'undefined' && ApiClient.BASE_URL) {
+    fetch(ApiClient.BASE_URL + '/industries', { method: 'GET' }).catch(function(){});
+  }
+
   // ── 보안 헬퍼 ──
   // HTML 이스케이프 (XSS 방지)
   function _h(s) {

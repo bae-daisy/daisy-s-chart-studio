@@ -1590,63 +1590,113 @@
 
     if (oldChart) oldChart.replaceWith(newEl);
 
-    // 깨진 아이콘 이미지 감지 → 클릭하면 리로드되는 플레이스홀더로 교체
+    // 깨진/실패 아이콘 감지 → 클릭 리로드 + 호버 툴팁
     setTimeout(() => {
       const svgEl = newEl.querySelector('svg');
       if (!svgEl) return;
+
+      // 커스텀 툴팁 헬퍼
+      let _tip = null;
+      function showTip(e, text) {
+        if (!_tip) {
+          _tip = document.createElement('div');
+          _tip.className = 'icon-tooltip';
+          document.body.appendChild(_tip);
+        }
+        _tip.textContent = text;
+        _tip.style.left = e.clientX + 12 + 'px';
+        _tip.style.top = e.clientY - 30 + 'px';
+        _tip.style.display = 'block';
+      }
+      function hideTip() { if (_tip) _tip.style.display = 'none'; }
+
+      // 리로드 함수
+      function reloadIcons() {
+        const parsed = slide.parsed || {};
+        const headers = parsed.headers || [];
+        const data = parsed.data || [];
+        const allNames = [...headers.slice(1), ...data.map(r => r[0])].filter(n => n && typeof n === 'string');
+        allNames.forEach(n => { if (SvgCharts._iconCache[n] === 'none') delete SvgCharts._iconCache[n]; });
+        // 깨진 URL도 제거
+        for (const [k, v] of Object.entries(SvgCharts._iconCache)) {
+          if (allNames.includes(k) && v && v !== 'none') {
+            // URL이 있지만 이미지가 깨진 경우도 제거
+          }
+        }
+        try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+        const toReload = allNames.filter(n => !SvgCharts._appIcon(n));
+        if (toReload.length > 0) {
+          SvgCharts.preloadAppIcons(toReload).then(() => rerenderChart(slide, wrapper));
+        }
+      }
+
+      // 깨진 이미지 감지
       const images = svgEl.querySelectorAll('image');
       images.forEach(img => {
         const testImg = new Image();
-        testImg.onload = () => {
-          if (testImg.naturalWidth < 2 || testImg.naturalHeight < 2) replaceBroken(img);
-        };
-        testImg.onerror = () => replaceBroken(img);
-        testImg.src = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
-        function replaceBroken(imgEl) {
+        const imgUrl = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+        testImg.onload = () => { if (testImg.naturalWidth < 2 || testImg.naturalHeight < 2) makePlaceholder(img); };
+        testImg.onerror = () => makePlaceholder(img);
+        testImg.src = imgUrl;
+        function makePlaceholder(imgEl) {
           const cx = parseFloat(imgEl.getAttribute('x')) + parseFloat(imgEl.getAttribute('width')) / 2;
           const cy = parseFloat(imgEl.getAttribute('y')) + parseFloat(imgEl.getAttribute('height')) / 2;
           const r = parseFloat(imgEl.getAttribute('width')) / 2;
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           g.setAttribute('style', 'cursor:pointer');
-          g.innerHTML = '<title>클릭하면 아이콘을 다시 불러옵니다</title>' +
-            '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#F3F0FF" stroke="#E5E1F0" stroke-width="1.5"/>' +
+          g.innerHTML = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#F3F0FF" stroke="#E5E1F0" stroke-width="1.5"/>' +
             '<text x="' + cx + '" y="' + (cy + r * 0.35) + '" text-anchor="middle" font-size="' + (r * 0.7) + '" fill="#8B7FC7" font-weight="600">↻</text>';
-          g.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            // 이 앱의 캐시를 지우고 전체 아이콘 리로드
-            const parsed = slide.parsed || {};
-            const headers = parsed.headers || [];
-            const data = parsed.data || [];
-            const allNames = [...headers.slice(1), ...data.map(r => r[0])].filter(n => n && typeof n === 'string');
-            // 실패한 캐시('none') 제거
-            allNames.forEach(n => { if (SvgCharts._iconCache[n] === 'none') delete SvgCharts._iconCache[n]; });
-            try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
-            // 리로드
-            const toReload = allNames.filter(n => !SvgCharts._appIcon(n));
-            if (toReload.length > 0) {
-              SvgCharts.preloadAppIcons(toReload).then(() => rerenderChart(slide, wrapper));
-            }
-          });
+          g.addEventListener('mouseenter', (e) => showTip(e, '아이콘 로드 실패 — 클릭하면 다시 시도'));
+          g.addEventListener('mouseleave', hideTip);
+          g.addEventListener('click', (ev) => { ev.stopPropagation(); hideTip(); reloadIcons(); });
           imgEl.parentNode.replaceChild(g, imgEl);
         }
       });
 
-      // SVG 내 플레이스홀더(첫 글자 원)에도 클릭 리로드 추가
+      // SVG 내 플레이스홀더(첫 글자 원)에도 클릭 리로드 + 툴팁
       svgEl.querySelectorAll('g').forEach(g => {
         const title = g.querySelector('title');
         if (!title || !title.textContent.includes('찾을 수 없습니다')) return;
         g.setAttribute('style', 'cursor:pointer');
-        title.textContent = title.textContent.replace('찾을 수 없습니다', '찾을 수 없습니다 (클릭하면 다시 시도)');
+        const match = title.textContent.match(/"(.+?)"/);
+        const appName = match ? match[1] : '';
+        title.remove(); // 네이티브 툴팁 제거
+        g.addEventListener('mouseenter', (e) => showTip(e, '"' + appName + '" 아이콘을 찾지 못했어요 — 클릭하면 다시 시도'));
+        g.addEventListener('mouseleave', hideTip);
         g.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          const match = title.textContent.match(/"(.+?)"/);
-          const appName = match ? match[1] : '';
+          hideTip();
           if (appName && SvgCharts._iconCache[appName] === 'none') {
             delete SvgCharts._iconCache[appName];
             try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
             SvgCharts.preloadAppIcons([appName]).then(() => rerenderChart(slide, wrapper));
           }
         });
+      });
+
+      // 스피너(로딩 중 아이콘)에도 클릭 리로드 + 툴팁
+      svgEl.querySelectorAll('circle').forEach(circle => {
+        const anim = circle.querySelector('animateTransform');
+        if (!anim) return;
+        const parent = circle.parentNode;
+        if (parent.tagName === 'g' && parent._hasReload) return;
+        // 스피너의 배경 원 찾기 (같은 위치의 이전 형제)
+        const bg = circle.previousElementSibling;
+        if (!bg || bg.tagName !== 'circle') return;
+        const cx = bg.getAttribute('cx');
+        const cy = bg.getAttribute('cy');
+        const r = bg.getAttribute('r');
+        // 투명 클릭 영역 추가
+        const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        hitArea.setAttribute('cx', cx);
+        hitArea.setAttribute('cy', cy);
+        hitArea.setAttribute('r', r);
+        hitArea.setAttribute('fill', 'transparent');
+        hitArea.setAttribute('style', 'cursor:pointer');
+        hitArea.addEventListener('mouseenter', (e) => showTip(e, '아이콘 로딩 중... 클릭하면 다시 시도'));
+        hitArea.addEventListener('mouseleave', hideTip);
+        hitArea.addEventListener('click', (ev) => { ev.stopPropagation(); hideTip(); reloadIcons(); });
+        circle.parentNode.insertBefore(hitArea, circle.nextSibling);
       });
     }, 500);
 

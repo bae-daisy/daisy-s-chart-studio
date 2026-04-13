@@ -2720,3 +2720,18 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   font-size: 12px !important;
   white-space: nowrap;
 }
+
+/* 아이콘 실패 커스텀 툴팁 */
+.icon-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 99999;
+  background: #333;
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}

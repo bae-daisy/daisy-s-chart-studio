@@ -1205,7 +1205,7 @@
               }).join('')}
             </div>
           </div>
-          <button class="st-btn rename-apps-btn" title="앱 이름 변경">📝 앱명</button>
+          <button class="st-btn rename-apps-btn" title="앱 이름 · 아이콘 설정">📝 앱명/아이콘</button>
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
@@ -1451,7 +1451,7 @@
         return;
       }
 
-      // 앱명 변경
+      // 앱명 · 아이콘 설정
       if (btn.classList.contains('rename-apps-btn')) {
         e.stopPropagation();
         const parsed = slide.parsed || {};
@@ -1459,11 +1459,12 @@
         const data = parsed.data || [];
         if (!slide.labelNames) slide.labelNames = {};
         if (!slide.legendNames) slide.legendNames = {};
-        // 앱 이름 후보 추출: 헤더(열 이름) + 데이터 첫 열
+        // 앱 이름 후보 추출
         const appNames = [];
-        const _skipRe = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고|기간|구분|항목|합계|평균|증감|D|W|M)$/;
-        const _notApp = /^(이탈|유입|유지|경쟁앱|총\s|전체|사용자|사용량|신규|기존|순위|점유율|증감|1인당|월평균|일평균|사용시간|사용일|활성|설치|삭제|재방문|점유|매출|다운로드|업종|트래픽)/;
-        headers.slice(1).forEach(h => { if (h && !_skipRe.test(h) && !_notApp.test(h) && !/^[\d,.%\-+]+$/.test(h)) appNames.push(h); });
+        const _skipRe = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고|기간|구분|항목|합계|평균|증감|패키지명?|D|W|M)$/;
+        const _notApp = /^(이탈|유입|유지|경쟁앱|총\s|전체|사용자|사용량|신규|기존|순위|점유율|증감|1인당|월평균|일평균|사용시간|사용일|활성|설치|삭제|재방문|점유|매출|다운로드|업종|트래픽|day\+|day\s|week|month|rate|rank|cnt)/i;
+        const _headerNotApp2 = /(\d+인당|월평균|일평균|사용시간|사용일|사용량|점유율|증감|비율|건수|횟수|패키지|package|pkg|day\+|week|month|rate|rank|cnt)/i;
+        headers.slice(1).forEach(h => { if (h && !_skipRe.test(h) && !_notApp.test(h) && !_headerNotApp2.test(h) && !/^[\d,.%\-+]+$/.test(h)) appNames.push(h); });
         data.forEach(r => {
           const s = String(r[0] || '').trim();
           if (s && s.length >= 2 && s.length <= 60 && !/^[\d,.%\-+]+$/.test(s) && !_skipRe.test(s) && !_notApp.test(s) && !/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*){2,}$/i.test(s)) {
@@ -1471,16 +1472,22 @@
           }
         });
         if (appNames.length === 0) { showToast('변경할 앱 이름이 없어요'); return; }
-        // 모달 생성
+        // 모달 생성 — 앱명 + 아이콘 URL
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.innerHTML = '<div class="rename-modal">' +
-          '<div class="rename-modal-header">📝 앱 이름 변경</div>' +
+          '<div class="rename-modal-header">📝 앱 이름 · 아이콘 설정</div>' +
           '<div class="rename-modal-list">' +
           appNames.map((n, i) => {
             const current = slide.labelNames[n] || slide.legendNames[n] || n;
-            return '<div class="rename-row"><span class="rename-orig">' + _h(n) + '</span>' +
-              '<input class="rename-input" data-orig="' + _h(n) + '" value="' + _h(current) + '" spellcheck="false"></div>';
+            const iconUrl = SvgCharts._appIcon(n) || SvgCharts._appIcon(current) || '';
+            const iconPreview = iconUrl ? '<img class="rename-icon-preview" src="' + _h(iconUrl) + '" onerror="this.style.display=\'none\'">' : '<span class="rename-icon-empty">?</span>';
+            return '<div class="rename-row">' +
+              '<div class="rename-icon-cell">' + iconPreview + '</div>' +
+              '<div class="rename-fields">' +
+                '<input class="rename-input" data-orig="' + _h(n) + '" value="' + _h(current) + '" placeholder="앱 이름" spellcheck="false">' +
+                '<input class="rename-icon-input" data-name="' + _h(n) + '" value="" placeholder="아이콘 URL (비워두면 자동 검색)" spellcheck="false">' +
+              '</div></div>';
           }).join('') +
           '</div>' +
           '<div class="rename-modal-footer"><button class="rename-cancel">취소</button><button class="rename-apply">적용</button></div>' +
@@ -1491,13 +1498,12 @@
         modal.addEventListener('click', ev => { if (ev.target === modal) { modal.classList.remove('open'); setTimeout(() => modal.remove(), 250); } });
         modal.querySelector('.rename-apply').addEventListener('click', () => {
           let changed = false;
+          // 앱명 변경 처리
           modal.querySelectorAll('.rename-input').forEach(inp => {
             const orig = inp.dataset.orig;
             const val = inp.value.trim();
             if (val && val !== orig) {
-              // parsed.data에서 직접 변경
               data.forEach(r => { if (String(r[0]).trim() === orig) r[0] = val; });
-              // 헤더에서도 변경
               const hi = headers.indexOf(orig);
               if (hi >= 0) headers[hi] = val;
               slide.labelNames[orig] = val;
@@ -1505,12 +1511,27 @@
               changed = true;
             }
           });
+          // 아이콘 URL 변경 처리
+          modal.querySelectorAll('.rename-icon-input').forEach(inp => {
+            const name = inp.dataset.name;
+            const url = inp.value.trim();
+            if (!url) return;
+            const displayName = slide.labelNames[name] || slide.legendNames[name] || name;
+            if (url.startsWith('data:') || url.startsWith('icons/')) {
+              SvgCharts._iconCache[name] = url;
+              SvgCharts._iconCache[displayName] = url;
+            } else if (url.startsWith('http')) {
+              SvgCharts._iconCache[name] = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(url) + '&raw=1';
+              SvgCharts._iconCache[displayName] = SvgCharts._iconCache[name];
+            }
+            try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+            changed = true;
+          });
           modal.classList.remove('open');
           setTimeout(() => modal.remove(), 250);
           if (changed) { rerenderChart(slide, wrapper); saveProject(); }
         });
-        // Enter로 적용
-        modal.querySelectorAll('.rename-input').forEach(inp => {
+        modal.querySelectorAll('.rename-input, .rename-icon-input').forEach(inp => {
           inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') modal.querySelector('.rename-apply').click(); });
         });
         return;

@@ -1273,7 +1273,7 @@ const SvgCharts = {
     try {
       const results = await Promise.all(toFetch.map(async (name) => {
         try {
-          const resp = await fetch('/api/search?keyword=' + encodeURIComponent(name));
+          const resp = await fetch(ApiClient.BASE_URL + '/search?keyword=' + encodeURIComponent(name));
           if (!resp.ok) return null;
           const json = await resp.json();
           const list = Array.isArray(json.data) ? json.data : [];

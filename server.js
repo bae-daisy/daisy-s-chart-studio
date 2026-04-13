@@ -602,13 +602,18 @@ app.post('/api/search-batch', async (req, res) => {
   const fetchHeaders = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' };
   const results = {};
 
-  // 아이콘 URL → base64 변환 헬퍼
+  // 아이콘 URL → base64 변환 헬퍼 (64px 축소)
   async function iconToBase64(url) {
     if (!url || !url.startsWith('https://')) return '';
     try {
+      // 구글 플레이 아이콘은 =s64로 축소 요청
+      let smallUrl = url;
+      if (url.includes('googleusercontent.com')) {
+        smallUrl = url.replace(/=s\d+(-rw)?$/, '') + '=s64-rw';
+      }
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), 4000);
-      const resp = await fetch(url, {
+      const resp = await fetch(smallUrl, {
         signal: ctrl.signal,
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChartStudio/1.0)' }
       });

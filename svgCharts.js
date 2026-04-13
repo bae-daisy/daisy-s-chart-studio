@@ -1362,8 +1362,10 @@ const SvgCharts = {
       if (resp.ok) {
         const json = await resp.json();
         const results = json.data || {};
+        console.log('[아이콘] 검색 키워드:', keywords, '응답 키:', Object.keys(results));
         for (const [kw, names] of Object.entries(kwMap)) {
           const list = results[kw];
+          console.log('[아이콘]', kw, '→', list ? list.length + '개 결과' : '결과 없음');
           names.forEach(name => {
             if (!list || list.length === 0) {
               return;
@@ -1375,16 +1377,17 @@ const SvgCharts = {
               const iconUrl = app.iconUrl || app.icon_url || '';
               const finalIcon = iconB64 || (iconUrl ? ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl) : '');
               if (finalIcon) {
+                console.log('[아이콘] ✅', name, '→', finalIcon.startsWith('data:') ? 'base64(' + finalIcon.length + ')' : finalIcon.slice(0, 60));
                 this._iconCache[name] = finalIcon;
                 const pkg = app.pkgName || app.pkg_name || '';
                 if (pkg) this._iconCache[pkg] = finalIcon;
                 const appName = app.appName || '';
                 if (appName && appName !== name) this._iconCache[appName] = finalIcon;
               } else {
-                // 아이콘 URL 없음 — 스킵
+                console.log('[아이콘] ❌', name, '→ 아이콘 URL 없음');
               }
             } else {
-              // 매칭 앱 없음 — 스킵
+              console.log('[아이콘] ❌', name, '→ 매칭 앱 없음');
             }
           });
         }

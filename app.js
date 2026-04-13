@@ -1610,24 +1610,16 @@
       }
       function hideTip() { if (_tip) _tip.style.display = 'none'; }
 
-      // 리로드 함수
+      // 리로드 함수: 실패/깨진 캐시를 모두 지우고 다시 검색
       function reloadIcons() {
         const parsed = slide.parsed || {};
         const headers = parsed.headers || [];
         const data = parsed.data || [];
         const allNames = [...headers.slice(1), ...data.map(r => r[0])].filter(n => n && typeof n === 'string');
-        allNames.forEach(n => { if (SvgCharts._iconCache[n] === 'none') delete SvgCharts._iconCache[n]; });
-        // 깨진 URL도 제거
-        for (const [k, v] of Object.entries(SvgCharts._iconCache)) {
-          if (allNames.includes(k) && v && v !== 'none') {
-            // URL이 있지만 이미지가 깨진 경우도 제거
-          }
-        }
+        // 이 장표의 모든 앱 캐시를 삭제 (깨진 URL 포함)
+        allNames.forEach(n => { delete SvgCharts._iconCache[n]; });
         try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
-        const toReload = allNames.filter(n => !SvgCharts._appIcon(n));
-        if (toReload.length > 0) {
-          SvgCharts.preloadAppIcons(toReload).then(() => rerenderChart(slide, wrapper));
-        }
+        SvgCharts.preloadAppIcons(allNames).then(() => rerenderChart(slide, wrapper));
       }
 
       // 깨진 이미지 감지
@@ -1666,7 +1658,7 @@
         g.addEventListener('click', (ev) => {
           ev.stopPropagation();
           hideTip();
-          if (appName && SvgCharts._iconCache[appName] === 'none') {
+          if (appName) {
             delete SvgCharts._iconCache[appName];
             try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
             SvgCharts.preloadAppIcons([appName]).then(() => rerenderChart(slide, wrapper));

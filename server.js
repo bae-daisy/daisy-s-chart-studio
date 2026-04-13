@@ -560,6 +560,33 @@ app.get('/api/cate-sub', async (req, res) => {
   }
 });
 
+// ── GET /api/icon 엔드포인트 (아이콘 이미지 프록시) ──
+
+app.get('/api/icon', async (req, res) => {
+  const url = req.query.url;
+  if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
+    return res.status(400).end();
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const imgResp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!imgResp.ok) return res.status(502).end();
+
+    const contentType = imgResp.headers.get('content-type') || 'image/png';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    const buffer = await imgResp.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (e) {
+    res.status(502).end();
+  }
+});
+
 // ── POST /api/search-batch 엔드포인트 (앱 아이콘 배치 검색) ──
 
 app.post('/api/search-batch', async (req, res) => {

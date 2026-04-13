@@ -1347,11 +1347,12 @@ const SvgCharts = {
             if (app) {
               const iconUrl = app.iconUrl || app.icon_url || '';
               if (iconUrl) {
-                this._iconCache[name] = iconUrl;
+                const proxied = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl);
+                this._iconCache[name] = proxied;
                 const pkg = app.pkgName || app.pkg_name || '';
-                if (pkg) this._iconCache[pkg] = iconUrl;
+                if (pkg) this._iconCache[pkg] = proxied;
                 const appName = app.appName || '';
-                if (appName && appName !== name) this._iconCache[appName] = iconUrl;
+                if (appName && appName !== name) this._iconCache[appName] = proxied;
               } else {
                 if (!this._iconCache[name]) this._iconCache[name] = 'none';
               }

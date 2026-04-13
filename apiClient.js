@@ -226,16 +226,18 @@ const ApiClient = {
       return s;
     }
 
-    // API 응답에서 앱 아이콘 URL을 바로 캐시 (별도 검색 불필요)
+    // API 응답에서 앱 아이콘 URL을 바로 캐시 (프록시 경유)
     if (typeof SvgCharts !== 'undefined' && SvgCharts._iconCache) {
       var _cached = false;
+      var _base = (typeof ApiClient !== 'undefined' && ApiClient.BASE_URL) ? ApiClient.BASE_URL : '/api';
       arr.forEach(function(obj) {
         var icon = obj.iconUrl || obj.icon_url || '';
         var name = obj.appName || '';
         var pkg = obj.pkgName || obj.pkg_name || '';
         if (icon) {
-          if (name) { SvgCharts._iconCache[name] = icon; _cached = true; }
-          if (pkg) { SvgCharts._iconCache[pkg] = icon; _cached = true; }
+          var proxied = _base + '/icon?url=' + encodeURIComponent(icon);
+          if (name) { SvgCharts._iconCache[name] = proxied; _cached = true; }
+          if (pkg) { SvgCharts._iconCache[pkg] = proxied; _cached = true; }
         }
       });
       if (_cached) {

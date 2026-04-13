@@ -560,30 +560,33 @@ app.get('/api/cate-sub', async (req, res) => {
   }
 });
 
-// ── GET /api/icon 엔드포인트 (아이콘 이미지 프록시) ──
+// ── GET /api/icon 엔드포인트 (아이콘 이미지 → base64 변환) ──
 
 app.get('/api/icon', async (req, res) => {
   const url = req.query.url;
   if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
-    return res.status(400).end();
+    return res.status(400).json({ error: 'invalid url' });
   }
 
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const imgResp = await fetch(url, { signal: controller.signal });
+    const imgResp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChartStudio/1.0)' }
+    });
     clearTimeout(timeoutId);
 
-    if (!imgResp.ok) return res.status(502).end();
+    if (!imgResp.ok) return res.status(502).json({ error: 'fetch failed' });
 
     const contentType = imgResp.headers.get('content-type') || 'image/png';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const buffer = Buffer.from(await imgResp.arrayBuffer());
+    const base64 = `data:${contentType};base64,${buffer.toString('base64')}`;
 
-    const buffer = await imgResp.arrayBuffer();
-    res.send(Buffer.from(buffer));
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.json({ success: true, data: base64 });
   } catch (e) {
-    res.status(502).end();
+    res.status(502).json({ error: 'timeout' });
   }
 });
 
@@ -599,6 +602,24 @@ app.post('/api/search-batch', async (req, res) => {
   const fetchHeaders = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' };
   const results = {};
 
+  // 아이콘 URL → base64 변환 헬퍼
+  async function iconToBase64(url) {
+    if (!url || !url.startsWith('https://')) return '';
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const resp = await fetch(url, {
+        signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChartStudio/1.0)' }
+      });
+      clearTimeout(tid);
+      if (!resp.ok) return '';
+      const ct = resp.headers.get('content-type') || 'image/png';
+      const buf = Buffer.from(await resp.arrayBuffer());
+      return `data:${ct};base64,${buf.toString('base64')}`;
+    } catch(e) { return ''; }
+  }
+
   await Promise.all(keywords.map(async (kw) => {
     if (!kw || typeof kw !== 'string' || kw.length > 100) return;
     try {
@@ -613,7 +634,15 @@ app.post('/api/search-batch', async (req, res) => {
         const json = await resp.json();
         const list = json.data || json.result || (Array.isArray(json) ? json : []);
         if (Array.isArray(list) && list.length > 0) {
-          results[kw] = sanitizeResponse(list.slice(0, 3));
+          const top3 = sanitizeResponse(list.slice(0, 3));
+          // 각 앱의 아이콘을 base64로 변환
+          await Promise.all(top3.map(async (app) => {
+            const iconUrl = app.iconUrl || app.icon_url || '';
+            if (iconUrl) {
+              app.iconBase64 = await iconToBase64(iconUrl);
+            }
+          }));
+          results[kw] = top3;
         }
       }
     } catch(e) { /* 개별 실패 무시 */ }

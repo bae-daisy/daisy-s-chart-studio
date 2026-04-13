@@ -1244,7 +1244,22 @@ const SvgCharts = {
       `<animateTransform attributeName="transform" type="rotate" from="0 ${cx} ${cy}" to="360 ${cx} ${cy}" dur="1s" repeatCount="indefinite"/></circle>`;
   },
 
-  _iconCache: (function() { try { return JSON.parse(localStorage.getItem('cs-icon-cache') || '{}'); } catch(e) { return {}; } })(),
+  _iconCache: (function() {
+    try {
+      var cache = JSON.parse(localStorage.getItem('cs-icon-cache') || '{}');
+      // base64, 로컬 아이콘, 'none'만 유지. 외부 URL/프록시 URL은 삭제 (깨짐 방지)
+      var cleaned = false;
+      for (var k in cache) {
+        var v = cache[k];
+        if (v && v !== 'none' && !v.startsWith('data:') && !v.startsWith('icons/')) {
+          delete cache[k];
+          cleaned = true;
+        }
+      }
+      if (cleaned) localStorage.setItem('cs-icon-cache', JSON.stringify(cache));
+      return cache;
+    } catch(e) { return {}; }
+  })(),
 
   _appIcon(nameOrPkg) {
     if (SvgCharts._showAppIcons === false) return '';
@@ -1346,14 +1361,16 @@ const SvgCharts = {
             }
             const app = _bestMatch(list, name);
             if (app) {
+              // base64 아이콘 우선, 없으면 프록시 URL
+              const iconB64 = app.iconBase64 || '';
               const iconUrl = app.iconUrl || app.icon_url || '';
-              if (iconUrl) {
-                const proxied = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl);
-                this._iconCache[name] = proxied;
+              const finalIcon = iconB64 || (iconUrl ? ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl) : '');
+              if (finalIcon) {
+                this._iconCache[name] = finalIcon;
                 const pkg = app.pkgName || app.pkg_name || '';
-                if (pkg) this._iconCache[pkg] = proxied;
+                if (pkg) this._iconCache[pkg] = finalIcon;
                 const appName = app.appName || '';
-                if (appName && appName !== name) this._iconCache[appName] = proxied;
+                if (appName && appName !== name) this._iconCache[appName] = finalIcon;
               } else {
                 if (!this._iconCache[name]) this._iconCache[name] = 'none';
               }

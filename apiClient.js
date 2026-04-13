@@ -226,7 +226,7 @@ const ApiClient = {
       return s;
     }
 
-    // API 응답에서 앱 아이콘 URL을 바로 캐시 (프록시 경유)
+    // API 응답에서 앱 아이콘 URL을 바로 캐시 (배치 검색에서 base64로 덮어씀)
     if (typeof SvgCharts !== 'undefined' && SvgCharts._iconCache) {
       var _cached = false;
       var _base = (typeof ApiClient !== 'undefined' && ApiClient.BASE_URL) ? ApiClient.BASE_URL : '/api';
@@ -234,7 +234,9 @@ const ApiClient = {
         var icon = obj.iconUrl || obj.icon_url || '';
         var name = obj.appName || '';
         var pkg = obj.pkgName || obj.pkg_name || '';
-        if (icon) {
+        if (icon && !icon.startsWith('data:')) {
+          // 이미 base64 캐시가 있으면 건너뛰기
+          if (name && SvgCharts._iconCache[name] && SvgCharts._iconCache[name].startsWith('data:')) return;
           var proxied = _base + '/icon?url=' + encodeURIComponent(icon);
           if (name) { SvgCharts._iconCache[name] = proxied; _cached = true; }
           if (pkg) { SvgCharts._iconCache[pkg] = proxied; _cached = true; }

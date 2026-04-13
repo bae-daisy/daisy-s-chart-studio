@@ -1244,7 +1244,22 @@ const SvgCharts = {
       `<animateTransform attributeName="transform" type="rotate" from="0 ${cx} ${cy}" to="360 ${cx} ${cy}" dur="1s" repeatCount="indefinite"/></circle>`;
   },
 
-  _iconCache: (function() { try { return JSON.parse(localStorage.getItem('cs-icon-cache') || '{}'); } catch(e) { return {}; } })(),
+  _iconCache: (function() {
+    try {
+      var cache = JSON.parse(localStorage.getItem('cs-icon-cache') || '{}');
+      // 프록시 경유가 아닌 외부 URL 캐시 정리
+      var cleaned = false;
+      for (var k in cache) {
+        var v = cache[k];
+        if (v && v !== 'none' && !v.startsWith('/api/') && !v.startsWith('icons/') && !v.includes('/api/icon?')) {
+          delete cache[k];
+          cleaned = true;
+        }
+      }
+      if (cleaned) localStorage.setItem('cs-icon-cache', JSON.stringify(cache));
+      return cache;
+    } catch(e) { return {}; }
+  })(),
 
   _appIcon(nameOrPkg) {
     if (SvgCharts._showAppIcons === false) return '';

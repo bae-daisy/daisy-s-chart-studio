@@ -1230,8 +1230,10 @@ const SvgCharts = {
   // 아이콘 없을 때 기본 플레이스홀더 (앱 이름 첫 글자)
   _iconPlaceholder(cx, cy, r, label) {
     const initial = (label || '?').charAt(0);
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#F3F0FF" stroke="${T.divider}" stroke-width="1.5"/>` +
-      `<text x="${cx}" y="${cy + r * 0.35}" text-anchor="middle" font-size="${r * 0.9}" fill="#8B7FC7" font-weight="600">${this._esc(initial)}</text>`;
+    const tooltip = `"${this._esc(label)}" 아이콘을 찾을 수 없습니다 (검색 결과 없음)`;
+    return `<g><title>${tooltip}</title>` +
+      `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#F3F0FF" stroke="${T.divider}" stroke-width="1.5" style="cursor:help"/>` +
+      `<text x="${cx}" y="${cy + r * 0.35}" text-anchor="middle" font-size="${r * 0.9}" fill="#8B7FC7" font-weight="600" style="cursor:help">${this._esc(initial)}</text></g>`;
   },
 
   // 아이콘 없을 때 로딩 스피너 SVG (원형 회전 애니메이션)

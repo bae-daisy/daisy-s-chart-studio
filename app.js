@@ -1515,12 +1515,34 @@
         // 로딩 배지 표시
         const badge = document.createElement('div');
         badge.className = 'icon-loading-badge';
-        badge.innerHTML = '🔄 앱 아이콘 로딩 중...';
+        const total = unique.length;
+        badge.textContent = '🔄 앱 아이콘 ' + total + '개 검색 준비 중...';
         chartArea.appendChild(badge);
+
+        const startTime = Date.now();
+        // 서버 응답 대기 중 상태 업데이트
+        const statusInterval = setInterval(() => {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          if (elapsed < 5) {
+            badge.textContent = '🔄 앱 아이콘 ' + total + '개 검색 중...';
+          } else if (elapsed < 15) {
+            badge.textContent = '⏳ 서버 응답 대기 중... (' + elapsed + '초)';
+          } else {
+            badge.textContent = '⏳ 서버 깨우는 중... (' + elapsed + '초, 최대 1분 소요)';
+          }
+        }, 1000);
+
         SvgCharts.preloadAppIcons(unique).then(() => {
-          badge.remove();
+          clearInterval(statusInterval);
+          const loaded = unique.filter(n => SvgCharts._appIcon(n)).length;
+          badge.textContent = '✅ 아이콘 ' + loaded + '/' + total + '개 로드 완료';
+          setTimeout(() => badge.remove(), 1500);
           rerenderChart(slide, wrapper);
-        }).catch(() => { badge.remove(); });
+        }).catch(() => {
+          clearInterval(statusInterval);
+          badge.textContent = '⚠️ 아이콘 로드 실패';
+          setTimeout(() => badge.remove(), 2000);
+        });
       }
     })();
 

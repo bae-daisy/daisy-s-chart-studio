@@ -1235,7 +1235,7 @@ const SvgCharts = {
       `<animateTransform attributeName="transform" type="rotate" from="0 ${cx} ${cy}" to="360 ${cx} ${cy}" dur="1s" repeatCount="indefinite"/></circle>`;
   },
 
-  _iconCache: {},
+  _iconCache: (function() { try { return JSON.parse(localStorage.getItem('cs-icon-cache') || '{}'); } catch(e) { return {}; } })(),
 
   _appIcon(nameOrPkg) {
     if (SvgCharts._showAppIcons === false) return '';
@@ -1268,12 +1268,6 @@ const SvgCharts = {
   // API로 앱 아이콘 URL을 미리 로드 (앱명 배열 → 캐시에 저장)
   async preloadAppIcons(appNames) {
     if (!appNames || appNames.length === 0) return;
-
-    // localStorage에서 캐시 복원
-    try {
-      const saved = JSON.parse(localStorage.getItem('cs-icon-cache') || '{}');
-      Object.assign(this._iconCache, saved);
-    } catch(e) {}
 
     const toFetch = appNames.filter(name => name && !this._appIcon(name));
     if (toFetch.length === 0) return;

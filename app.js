@@ -3978,6 +3978,18 @@
     if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
   });
 
+  // ── 온보딩 그라디언트 마우스 추적 ──
+  (function initGradientBg() {
+    const ob = document.querySelector('.onboarding');
+    if (!ob) return;
+    ob.addEventListener('mousemove', function(e) {
+      const x = ((e.clientX / window.innerWidth) * 100).toFixed(1) + '%';
+      const y = ((e.clientY / window.innerHeight) * 100).toFixed(1) + '%';
+      ob.style.setProperty('--mx', x);
+      ob.style.setProperty('--my', y);
+    });
+  })();
+
   // ── 온보딩 탭 전환 ──
   (function initOnboardingTabs() {
     const tabsContainer = document.getElementById('onboardingTabs');

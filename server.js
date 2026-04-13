@@ -719,13 +719,13 @@ if (!process.env.RENDER) {
 } else {
   // Render 배포 환경: API 전용, 루트 접속 시 안내 메시지
   app.get('/', (_req, res) => {
-    res.json({ status: 'ok', message: 'Freesentation API Server' });
+    res.json({ status: 'ok', message: 'Chart Studio API Server' });
   });
 }
 
 // ── 서버 시작 ──
 app.listen(PORT, () => {
-  console.log(`[Freesentation] 서버가 http://localhost:${PORT} 에서 실행 중입니다`);
+  console.log(`[Chart Studio] 서버가 http://localhost:${PORT} 에서 실행 중입니다`);
 });
 
 module.exports = app;

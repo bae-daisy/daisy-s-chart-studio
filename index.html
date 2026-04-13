@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://daisy-s-chart-studio.onrender.com blob:">
-  <title>Freesentation — 데이터 시각화</title>
+  <title>Chart Studio — 데이터 시각화</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -16,7 +16,7 @@
   <div id="lockScreen" class="lock-screen">
     <div class="lock-panel">
       <div class="lock-icon">🔒</div>
-      <h2 class="lock-title">Freesentation</h2>
+      <h2 class="lock-title">Chart Studio</h2>
       <p class="lock-desc">팀 전용 도구입니다. 비밀번호를 입력해주세요.</p>
       <form id="lockForm" autocomplete="off">
         <input type="password" id="lockInput" class="lock-input" placeholder="비밀번호" autofocus autocomplete="off">
@@ -31,9 +31,9 @@
     <div id="onboarding" class="onboarding">
       <div class="onboarding-badge">
         <div class="badge-dot"></div>
-        <span>Freesentation</span>
+        <span>Chart Studio</span>
       </div>
-      <h1 class="onboarding-title">데이터<em>만</em> 넣으면<br><span class="accent">장표가 완성</span>됩니다</h1>
+      <h1 class="onboarding-title">데이터만 넣으면<br><span class="accent">장표가 완성</span>됩니다</h1>
       <p class="onboarding-desc">CSV, Excel 등 데이터 파일을 올리면 바로 장표를 만들어드려요</p>
       <div id="savedProjects" class="saved-projects"></div>
 
@@ -209,6 +209,25 @@
         <span class="guide-callout-icon">📖</span>
         <span class="guide-callout-text">처음이신가요? 사용법 확인하기</span>
         <span class="guide-callout-arrow">›</span>
+      </div>
+    </div>
+
+    <!-- 가이드 섹션 (스크롤) -->
+    <div class="landing-guide">
+      <div class="guide-section">
+        <div class="guide-num">01</div>
+        <h2 class="guide-title">데이터 파일을 올리세요</h2>
+        <p class="guide-desc">CSV, Excel 파일을 드래그하거나 클릭해서 업로드하면<br>자동으로 데이터를 분석하고 최적의 차트를 추천합니다</p>
+      </div>
+      <div class="guide-section">
+        <div class="guide-num">02</div>
+        <h2 class="guide-title">차트 유형을 선택하세요</h2>
+        <p class="guide-desc">라인, 바, 도넛, 스캐터 등 다양한 차트 중에서<br>데이터에 맞는 유형을 자유롭게 변경할 수 있어요</p>
+      </div>
+      <div class="guide-section">
+        <div class="guide-num">03</div>
+        <h2 class="guide-title">커스터마이징하세요</h2>
+        <p class="guide-desc">제목, 색상, 앱 아이콘, 범례 이름까지<br>원하는 대로 수정하고 바로 PNG/SVG로 다운로드</p>
       </div>
     </div>
 

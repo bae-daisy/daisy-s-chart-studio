@@ -28,7 +28,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0 24px;
-  background: #0a0a0f;
+  background: #FAFAFA;
   position: relative;
   overflow: hidden;
 }
@@ -37,28 +37,25 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 600px 600px at var(--mx, 50%) var(--my, 40%), rgba(108,92,231,0.25) 0%, transparent 70%),
-    radial-gradient(ellipse 400px 400px at calc(var(--mx, 50%) + 15%) calc(var(--my, 40%) - 10%), rgba(168,155,254,0.15) 0%, transparent 60%),
-    radial-gradient(ellipse 300px 300px at calc(var(--mx, 50%) - 20%) calc(var(--my, 40%) + 15%), rgba(99,102,241,0.12) 0%, transparent 60%);
+    radial-gradient(ellipse 600px 600px at var(--mx, 50%) var(--my, 40%), rgba(108,92,231,0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 400px 400px at calc(var(--mx, 50%) + 15%) calc(var(--my, 40%) - 10%), rgba(168,155,254,0.06) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
   transition: background 0.3s ease;
 }
 .onboarding > * { position: relative; z-index: 1; }
-.onboarding-title, .onboarding-desc, .onboarding-badge span { color: #fff; }
-.onboarding-desc { color: rgba(255,255,255,0.6) !important; }
+.onboarding-title, .onboarding-badge span { color: var(--text); }
+.onboarding-desc { color: var(--text-muted) !important; }
 
 .onboarding-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: #FFF;
   border-radius: 100px;
   padding: 8px 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 12px rgba(108,92,231,0.08);
   margin-bottom: 32px;
-  backdrop-filter: blur(8px);
 }
 .badge-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .onboarding-badge span { font-size: 14px; font-weight: 700; }
@@ -71,7 +68,7 @@ body {
   text-align: center;
   margin-bottom: 16px;
 }
-.accent { color: #A89BFE; }
+.accent { color: var(--accent); }
 
 .onboarding-desc {
   font-size: 17px;
@@ -121,30 +118,29 @@ body {
 .sp-delete:hover { background: #FEE; color: #E55; }
 
 .upload-zone {
-  background: rgba(255,255,255,0.06);
+  background: #FFF;
   border-radius: 20px;
   padding: 48px 32px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.1);
-  border: 1.5px dashed rgba(255,255,255,0.2);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  border: 1.5px dashed #DDD;
   cursor: pointer;
   max-width: 440px;
   width: 100%;
   text-align: center;
   transition: all 0.2s;
-  backdrop-filter: blur(12px);
 }
 .upload-zone:hover, .upload-zone.dragover {
   border-color: var(--accent);
-  background: rgba(108,92,231,0.12);
+  background: #F5F3FF;
 }
 .upload-icon-wrap {
   width: 56px; height: 56px; border-radius: 16px;
-  background: rgba(108,92,231,0.15);
+  background: #F5F3FF;
   display: flex; align-items: center; justify-content: center;
   margin: 0 auto 16px;
 }
-.upload-text { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: #fff; }
-.upload-hint { font-size: 13px; color: rgba(255,255,255,0.45); }
+.upload-text { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.upload-hint { font-size: 13px; color: #B0B0B0; }
 
 /* ── 가이드 콜아웃 ── */
 .guide-callout {
@@ -181,6 +177,44 @@ body {
   transition: transform 0.15s;
 }
 .guide-callout:hover .guide-callout-arrow { transform: translateX(3px); }
+
+/* ── 랜딩 가이드 섹션 ── */
+.landing-guide {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 80px 24px 100px;
+}
+.guide-section {
+  text-align: center;
+  padding: 60px 0;
+  border-top: 1px solid #eee;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.guide-section.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.guide-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+.guide-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.guide-desc {
+  font-size: 16px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
 
 /* 가이드 모달 */
 .guide-modal {
@@ -2036,11 +2070,10 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   gap: 4px;
   max-width: 440px;
   width: 100%;
-  background: rgba(255,255,255,0.06);
+  background: #F0F0F0;
   border-radius: 12px;
   padding: 4px;
   margin-bottom: 20px;
-  border: 1px solid rgba(255,255,255,0.08);
 }
 .onboarding-tab {
   flex: 1;
@@ -2051,18 +2084,18 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
-  color: rgba(255,255,255,0.45);
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
 }
 .onboarding-tab:hover {
-  color: rgba(255,255,255,0.8);
+  color: var(--text-dark);
 }
 .onboarding-tab.active {
-  background: rgba(108,92,231,0.3);
-  color: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  background: #FFF;
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .onboarding-panel {

@@ -3990,6 +3990,18 @@
     });
   })();
 
+  // ── 가이드 섹션 스크롤 애니메이션 ──
+  (function initGuideScroll() {
+    const sections = document.querySelectorAll('.guide-section');
+    if (!sections.length) return;
+    const observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) entry.target.classList.add('visible');
+      });
+    }, { threshold: 0.2 });
+    sections.forEach(function(s) { observer.observe(s); });
+  })();
+
   // ── 온보딩 탭 전환 ──
   (function initOnboardingTabs() {
     const tabsContainer = document.getElementById('onboardingTabs');

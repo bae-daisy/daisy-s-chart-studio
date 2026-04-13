@@ -1512,43 +1512,73 @@
       if (meta.appName) names.push(meta.appName.replace('내 앱:', '').trim());
       const unique = [...new Set(names)].filter(n => n && !SvgCharts._appIcon(n));
       if (unique.length > 0) {
-        // 로딩 배지 표시
-        const badge = document.createElement('div');
-        badge.className = 'icon-loading-badge';
-        const total = unique.length;
-        badge.textContent = '🔄 앱 아이콘 ' + total + '개 검색 준비 중...';
-        chartArea.appendChild(badge);
+        // 아이콘 상태 패널 표시
+        const panel = document.createElement('div');
+        panel.className = 'icon-status-panel';
+        panel.innerHTML = '<div class="isp-header"><span>🖼️ 앱 아이콘 로딩</span><button class="isp-close">✕</button></div>' +
+          '<div class="isp-list">' + unique.map(n => '<div class="isp-item" data-name="' + _h(n) + '"><span class="isp-icon">⏳</span><span class="isp-name">' + _h(n) + '</span><span class="isp-status">대기 중</span></div>').join('') + '</div>' +
+          '<div class="isp-footer"></div>';
+        document.body.appendChild(panel);
+        panel.querySelector('.isp-close').addEventListener('click', () => panel.remove());
 
         const startTime = Date.now();
-        // 서버 응답 대기 중 상태 업데이트
         const statusInterval = setInterval(() => {
           const elapsed = Math.round((Date.now() - startTime) / 1000);
-          if (elapsed < 5) {
-            badge.textContent = '🔄 앱 아이콘 ' + total + '개 검색 중...';
-          } else if (elapsed < 15) {
-            badge.textContent = '⏳ 서버 응답 대기 중... (' + elapsed + '초)';
-          } else {
-            badge.textContent = '⏳ 서버 깨우는 중... (' + elapsed + '초, 최대 1분 소요)';
-          }
+          const footer = panel.querySelector('.isp-footer');
+          if (elapsed < 5) footer.textContent = '서버 요청 중...';
+          else if (elapsed < 15) footer.textContent = '서버 응답 대기 중... (' + elapsed + '초)';
+          else footer.textContent = '서버 깨우는 중... (' + elapsed + '초)';
         }, 1000);
 
         SvgCharts.preloadAppIcons(unique).then(() => {
           clearInterval(statusInterval);
+          // 각 앱 상태 업데이트
+          unique.forEach(n => {
+            const item = panel.querySelector('.isp-item[data-name="' + CSS.escape(n) + '"]');
+            if (!item) return;
+            const hasIcon = SvgCharts._appIcon(n);
+            const iconEl = item.querySelector('.isp-icon');
+            const statusEl = item.querySelector('.isp-status');
+            if (hasIcon) {
+              iconEl.textContent = '✅';
+              statusEl.textContent = '완료';
+              item.classList.add('isp-done');
+            } else {
+              iconEl.textContent = '❌';
+              statusEl.innerHTML = '<input class="isp-url-input" type="text" placeholder="아이콘 URL 붙여넣기" spellcheck="false"><button class="isp-url-apply">적용</button>';
+              item.classList.add('isp-fail');
+              // URL 직접 입력 적용
+              const applyBtn = statusEl.querySelector('.isp-url-apply');
+              const urlInput = statusEl.querySelector('.isp-url-input');
+              applyBtn.addEventListener('click', () => {
+                const url = urlInput.value.trim();
+                if (!url) return;
+                // URL이면 프록시 경유, data:면 직접 사용
+                if (url.startsWith('data:')) {
+                  SvgCharts._iconCache[n] = url;
+                } else if (url.startsWith('http')) {
+                  SvgCharts._iconCache[n] = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(url);
+                } else {
+                  SvgCharts._iconCache[n] = url;
+                }
+                try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+                iconEl.textContent = '✅';
+                statusEl.textContent = '적용됨';
+                item.classList.remove('isp-fail');
+                item.classList.add('isp-done');
+                rerenderChart(slide, wrapper);
+              });
+              urlInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') applyBtn.click(); });
+            }
+          });
+          const footer = panel.querySelector('.isp-footer');
           const loaded = unique.filter(n => SvgCharts._appIcon(n)).length;
-          const failed = unique.filter(n => !SvgCharts._appIcon(n));
-          if (failed.length === 0) {
-            badge.textContent = '✅ 아이콘 ' + loaded + '/' + total + '개 로드 완료';
-          } else {
-            badge.textContent = '✅ ' + loaded + '/' + total + '개 완료';
-            badge.title = '아이콘을 찾지 못한 앱: ' + failed.join(', ');
-            badge.style.cursor = 'help';
-          }
-          setTimeout(() => badge.remove(), failed.length > 0 ? 3000 : 1500);
+          footer.textContent = loaded + '/' + unique.length + '개 완료' + (loaded < unique.length ? ' — 실패한 앱은 URL을 직접 입력할 수 있어요' : '');
+          if (loaded === unique.length) setTimeout(() => panel.remove(), 2000);
           rerenderChart(slide, wrapper);
         }).catch(() => {
           clearInterval(statusInterval);
-          badge.textContent = '⚠️ 아이콘 로드 실패';
-          setTimeout(() => badge.remove(), 2000);
+          panel.querySelector('.isp-footer').textContent = '⚠️ 서버 연결 실패';
         });
       }
     })();

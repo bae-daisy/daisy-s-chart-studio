@@ -2735,3 +2735,75 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
+
+/* 아이콘 상태 패널 */
+.icon-status-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 340px;
+  max-height: 400px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+  animation: ispSlideIn 0.3s ease;
+}
+@keyframes ispSlideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.isp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  font-weight: 700;
+  border-bottom: 1px solid #f0f0f0;
+}
+.isp-close {
+  background: none; border: none; font-size: 16px; cursor: pointer; color: #999;
+}
+.isp-list {
+  overflow-y: auto;
+  max-height: 280px;
+  padding: 4px 0;
+}
+.isp-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f8f8f8;
+}
+.isp-item.isp-done { opacity: 0.6; }
+.isp-item.isp-fail { background: #FFF5F5; }
+.isp-icon { font-size: 14px; flex-shrink: 0; }
+.isp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.isp-status { font-size: 12px; color: #888; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+.isp-url-input {
+  width: 120px;
+  padding: 3px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 11px;
+  outline: none;
+}
+.isp-url-input:focus { border-color: var(--accent); }
+.isp-url-apply {
+  padding: 3px 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.isp-footer {
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #888;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}

@@ -560,6 +560,41 @@ app.get('/api/cate-sub', async (req, res) => {
   }
 });
 
+// ── POST /api/search-batch 엔드포인트 (앱 아이콘 배치 검색) ──
+
+app.post('/api/search-batch', async (req, res) => {
+  const { keywords } = req.body || {};
+  if (!Array.isArray(keywords) || keywords.length === 0 || keywords.length > 30) {
+    return res.status(400).json({ success: false, error: 'keywords 배열이 필요합니다 (최대 30개)' });
+  }
+
+  const token = process.env.MOBILE_INDEX_TOKEN;
+  const fetchHeaders = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' };
+  const results = {};
+
+  await Promise.all(keywords.map(async (kw) => {
+    if (!kw || typeof kw !== 'string' || kw.length > 100) return;
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      const resp = await fetch(
+        `${MOBILE_INDEX_BASE_URL}/common/search?keyword=${encodeURIComponent(kw)}`,
+        { method: 'GET', headers: fetchHeaders, signal: ctrl.signal }
+      );
+      clearTimeout(tid);
+      if (resp.ok) {
+        const json = await resp.json();
+        const list = json.data || json.result || (Array.isArray(json) ? json : []);
+        if (Array.isArray(list) && list.length > 0) {
+          results[kw] = sanitizeResponse(list.slice(0, 3));
+        }
+      }
+    } catch(e) { /* 개별 실패 무시 */ }
+  }));
+
+  return res.json({ success: true, data: results });
+});
+
 // ── GET /api/search 엔드포인트 (앱 검색) ──
 
 app.get('/api/search', async (req, res) => {

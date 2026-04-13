@@ -1268,27 +1268,72 @@ const SvgCharts = {
   // API로 앱 아이콘 URL을 미리 로드 (앱명 배열 → 캐시에 저장)
   async preloadAppIcons(appNames) {
     if (!appNames || appNames.length === 0) return;
+
+    // localStorage에서 캐시 복원
+    try {
+      const saved = JSON.parse(localStorage.getItem('cs-icon-cache') || '{}');
+      Object.assign(this._iconCache, saved);
+    } catch(e) {}
+
     const toFetch = appNames.filter(name => name && !this._appIcon(name));
     if (toFetch.length === 0) return;
+
+    // 긴 앱 이름에서 검색용 키워드 추출
+    const _searchKeyword = (name) => {
+      let kw = name.replace(/\s*[\(\[（].*/g, '').replace(/\s*[-–—].*/g, '').trim();
+      if (kw.length > 15) kw = kw.slice(0, 10).trim();
+      if (kw.length < 2) kw = name.slice(0, 10).trim();
+      return kw;
+    };
+
+    // 검색 결과에서 가장 잘 맞는 앱 찾기
+    const _bestMatch = (list, name) => {
+      if (list.length === 0) return null;
+      const lower = name.toLowerCase();
+      const exact = list.find(a => (a.appName || '').toLowerCase() === lower);
+      if (exact) return exact;
+      const partial = list.find(a => {
+        const an = (a.appName || '').toLowerCase();
+        return an.includes(lower) || lower.includes(an);
+      });
+      if (partial) return partial;
+      return list[0];
+    };
+
+    // 재시도 포함 fetch
+    const _fetchWithRetry = async (url) => {
+      let resp = await fetch(url);
+      if (!resp.ok) {
+        // Render 슬립 깨우기 대기 후 재시도
+        await new Promise(r => setTimeout(r, 3000));
+        resp = await fetch(url);
+      }
+      return resp;
+    };
+
     try {
-      const results = await Promise.all(toFetch.map(async (name) => {
+      await Promise.all(toFetch.map(async (name) => {
         try {
-          const resp = await fetch(ApiClient.BASE_URL + '/search?keyword=' + encodeURIComponent(name));
-          if (!resp.ok) return null;
+          const kw = _searchKeyword(name);
+          const resp = await _fetchWithRetry(ApiClient.BASE_URL + '/search?keyword=' + encodeURIComponent(kw));
+          if (!resp.ok) return;
           const json = await resp.json();
           const list = Array.isArray(json.data) ? json.data : [];
-          if (list.length > 0) {
-            const app = list[0];
+          const app = _bestMatch(list, name);
+          if (app) {
             const iconUrl = app.iconUrl || app.icon_url || '';
             if (iconUrl) {
               this._iconCache[name] = iconUrl;
-              // 패키지명으로도 캐시
               const pkg = app.pkgName || app.pkg_name || '';
               if (pkg) this._iconCache[pkg] = iconUrl;
+              const appName = app.appName || '';
+              if (appName && appName !== name) this._iconCache[appName] = iconUrl;
             }
           }
         } catch(e) { /* 무시 */ }
       }));
+      // 캐시를 localStorage에 저장
+      try { localStorage.setItem('cs-icon-cache', JSON.stringify(this._iconCache)); } catch(e) {}
     } catch(e) { /* 무시 */ }
   },
   // ── 아이콘 크기/모양 유틸리티 ──

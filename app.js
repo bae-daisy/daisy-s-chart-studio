@@ -1590,9 +1590,11 @@
 
     if (oldChart) oldChart.replaceWith(newEl);
 
-    // 깨진 아이콘 이미지 감지 → 플레이스홀더로 교체
+    // 깨진 아이콘 이미지 감지 → 클릭하면 리로드되는 플레이스홀더로 교체
     setTimeout(() => {
-      const images = newEl.querySelectorAll('svg image');
+      const svgEl = newEl.querySelector('svg');
+      if (!svgEl) return;
+      const images = svgEl.querySelectorAll('image');
       images.forEach(img => {
         const testImg = new Image();
         testImg.onload = () => {
@@ -1605,11 +1607,46 @@
           const cy = parseFloat(imgEl.getAttribute('y')) + parseFloat(imgEl.getAttribute('height')) / 2;
           const r = parseFloat(imgEl.getAttribute('width')) / 2;
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-          g.innerHTML = '<title>아이콘 이미지 로드 실패</title>' +
-            '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#F3F0FF" stroke="#E5E1F0" stroke-width="1.5" style="cursor:help"/>' +
-            '<text x="' + cx + '" y="' + (cy + r * 0.35) + '" text-anchor="middle" font-size="' + (r * 0.9) + '" fill="#8B7FC7" font-weight="600" style="cursor:help">?</text>';
+          g.setAttribute('style', 'cursor:pointer');
+          g.innerHTML = '<title>클릭하면 아이콘을 다시 불러옵니다</title>' +
+            '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#F3F0FF" stroke="#E5E1F0" stroke-width="1.5"/>' +
+            '<text x="' + cx + '" y="' + (cy + r * 0.35) + '" text-anchor="middle" font-size="' + (r * 0.7) + '" fill="#8B7FC7" font-weight="600">↻</text>';
+          g.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            // 이 앱의 캐시를 지우고 전체 아이콘 리로드
+            const parsed = slide.parsed || {};
+            const headers = parsed.headers || [];
+            const data = parsed.data || [];
+            const allNames = [...headers.slice(1), ...data.map(r => r[0])].filter(n => n && typeof n === 'string');
+            // 실패한 캐시('none') 제거
+            allNames.forEach(n => { if (SvgCharts._iconCache[n] === 'none') delete SvgCharts._iconCache[n]; });
+            try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+            // 리로드
+            const toReload = allNames.filter(n => !SvgCharts._appIcon(n));
+            if (toReload.length > 0) {
+              SvgCharts.preloadAppIcons(toReload).then(() => rerenderChart(slide, wrapper));
+            }
+          });
           imgEl.parentNode.replaceChild(g, imgEl);
         }
+      });
+
+      // SVG 내 플레이스홀더(첫 글자 원)에도 클릭 리로드 추가
+      svgEl.querySelectorAll('g').forEach(g => {
+        const title = g.querySelector('title');
+        if (!title || !title.textContent.includes('찾을 수 없습니다')) return;
+        g.setAttribute('style', 'cursor:pointer');
+        title.textContent = title.textContent.replace('찾을 수 없습니다', '찾을 수 없습니다 (클릭하면 다시 시도)');
+        g.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const match = title.textContent.match(/"(.+?)"/);
+          const appName = match ? match[1] : '';
+          if (appName && SvgCharts._iconCache[appName] === 'none') {
+            delete SvgCharts._iconCache[appName];
+            try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+            SvgCharts.preloadAppIcons([appName]).then(() => rerenderChart(slide, wrapper));
+          }
+        });
       });
     }, 500);
 

@@ -1304,8 +1304,10 @@ const SvgCharts = {
 
     // 긴 앱 이름에서 검색용 키워드 추출
     const _searchKeyword = (name) => {
-      let kw = name.replace(/\s*[\(\[（].*/g, '').replace(/\s*[-–—].*/g, '').trim();
-      if (kw.length > 15) kw = kw.slice(0, 10).trim();
+      // 괄호 안 내용 제거, 하이픈/대시 이후 제거
+      let kw = name.replace(/\s*[\(\[（][^)）\]]*[\)）\]]?\s*/g, '').replace(/\s*[-–—].*$/g, '').trim();
+      if (kw.length > 20) kw = kw.slice(0, 15).trim();
+      if (kw.length < 2) kw = name.replace(/[^a-zA-Z가-힣0-9\s]/g, '').trim().slice(0, 15);
       if (kw.length < 2) kw = name.slice(0, 10).trim();
       return kw;
     };
@@ -1314,13 +1316,22 @@ const SvgCharts = {
     const _bestMatch = (list, name) => {
       if (!list || list.length === 0) return null;
       const lower = name.toLowerCase();
+      // 정확히 일치
       const exact = list.find(a => (a.appName || '').toLowerCase() === lower);
       if (exact) return exact;
+      // 앱 이름이 포함
       const partial = list.find(a => {
         const an = (a.appName || '').toLowerCase();
         return an.includes(lower) || lower.includes(an);
       });
-      return partial || list[0];
+      if (partial) return partial;
+      // 첫 단어 매칭
+      const firstWord = lower.replace(/[^a-z가-힣0-9]/g, '').slice(0, 4);
+      if (firstWord.length >= 2) {
+        const wordMatch = list.find(a => (a.appName || '').toLowerCase().replace(/[^a-z가-힣0-9]/g, '').includes(firstWord));
+        if (wordMatch) return wordMatch;
+      }
+      return list[0];
     };
 
     // 키워드 → 원본 이름 매핑

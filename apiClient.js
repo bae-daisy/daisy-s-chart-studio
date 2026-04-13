@@ -226,6 +226,23 @@ const ApiClient = {
       return s;
     }
 
+    // API 응답에서 앱 아이콘 URL을 바로 캐시 (별도 검색 불필요)
+    if (typeof SvgCharts !== 'undefined' && SvgCharts._iconCache) {
+      var _cached = false;
+      arr.forEach(function(obj) {
+        var icon = obj.iconUrl || obj.icon_url || '';
+        var name = obj.appName || '';
+        var pkg = obj.pkgName || obj.pkg_name || '';
+        if (icon) {
+          if (name) { SvgCharts._iconCache[name] = icon; _cached = true; }
+          if (pkg) { SvgCharts._iconCache[pkg] = icon; _cached = true; }
+        }
+      });
+      if (_cached) {
+        try { localStorage.setItem('cs-icon-cache', JSON.stringify(SvgCharts._iconCache)); } catch(e) {}
+      }
+    }
+
     // 복수 앱 + 날짜 있으면 피벗 (날짜 행, 앱 열)
     var appNames = [];
     var dates = [];

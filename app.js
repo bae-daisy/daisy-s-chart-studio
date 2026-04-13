@@ -254,6 +254,7 @@
 
     const _origTextBeforeEdit = t.textContent;
     const apply = () => {
+      if (!overlay.parentNode) return;
       t.textContent = input.value;
       overlay.remove();
 

@@ -1535,8 +1535,15 @@
         SvgCharts.preloadAppIcons(unique).then(() => {
           clearInterval(statusInterval);
           const loaded = unique.filter(n => SvgCharts._appIcon(n)).length;
-          badge.textContent = '✅ 아이콘 ' + loaded + '/' + total + '개 로드 완료';
-          setTimeout(() => badge.remove(), 1500);
+          const failed = unique.filter(n => !SvgCharts._appIcon(n));
+          if (failed.length === 0) {
+            badge.textContent = '✅ 아이콘 ' + loaded + '/' + total + '개 로드 완료';
+          } else {
+            badge.textContent = '✅ ' + loaded + '/' + total + '개 완료';
+            badge.title = '아이콘을 찾지 못한 앱: ' + failed.join(', ');
+            badge.style.cursor = 'help';
+          }
+          setTimeout(() => badge.remove(), failed.length > 0 ? 3000 : 1500);
           rerenderChart(slide, wrapper);
         }).catch(() => {
           clearInterval(statusInterval);

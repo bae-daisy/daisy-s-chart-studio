@@ -1166,10 +1166,14 @@
         <div class="st-actions">
           <button class="st-btn reselect-btn" title="데이터 영역 다시 선택">📊 데이터 다시 선택</button>
           <button class="st-btn transpose-btn" title="행과 열 바꾸기">🔄 행/열 바꾸기</button>
-          <button class="st-btn icon-toggle-btn${slide.showAppIcons === false ? '' : ' active'}" title="앱 아이콘 표시/숨기기">${slide.showAppIcons === false ? '🖼️ 아이콘 OFF' : '🖼️ 아이콘 ON'}</button>
           <div class="icon-dropdown-wrap" style="position:relative;display:inline-block">
-            <button class="st-btn icon-dropdown-trigger${slide.showAppIcons === false ? ' disabled' : ''}" title="아이콘 모양/크기 설정">▾</button>
+            <button class="st-btn icon-toggle-btn${slide.showAppIcons === false ? '' : ' active'}" title="앱 아이콘 표시/숨기기">${slide.showAppIcons === false ? '🖼️ 아이콘 OFF' : '🖼️ 아이콘 ON'} <span class="icon-toggle-arrow">▾</span></button>
             <div class="icon-dropdown-menu">
+              <div class="icon-dd-section">
+                <div class="icon-dd-options">
+                  <button class="icon-dd-opt icon-onoff-opt${slide.showAppIcons === false ? '' : ' active'}" data-prop="showAppIcons" data-val="toggle">${slide.showAppIcons === false ? '🖼️ 아이콘 켜기' : '🖼️ 아이콘 끄기'}</button>
+                </div>
+              </div>
               <div class="icon-dd-section">
                 <div class="icon-dd-label">모양</div>
                 <div class="icon-dd-options">
@@ -1371,21 +1375,11 @@
         return;
       }
 
-      // 앱 아이콘 토글
+      // 앱 아이콘 버튼 → 드롭다운 열기
       if (btn.classList.contains('icon-toggle-btn')) {
         e.stopPropagation();
-        slide.showAppIcons = slide.showAppIcons === false ? true : false;
-        renderToolbarContent();
-        rerenderChart(slide, wrapper);
-        saveProject();
-        return;
-      }
-
-      // 아이콘 드롭다운 트리거
-      if (btn.classList.contains('icon-dropdown-trigger')) {
-        e.stopPropagation();
-        if (slide.showAppIcons === false) return;
-        var ddMenu = btn.parentElement.querySelector('.icon-dropdown-menu');
+        var ddWrap = btn.closest('.icon-dropdown-wrap');
+        var ddMenu = ddWrap ? ddWrap.querySelector('.icon-dropdown-menu') : null;
         if (!ddMenu) return;
         ddMenu.classList.toggle('open');
         var closeDd = function(ev) {
@@ -1398,11 +1392,22 @@
         return;
       }
 
+      // (레거시) 아이콘 드롭다운 트리거 — 이제 icon-toggle-btn에 통합됨
+      if (btn.classList.contains('icon-dropdown-trigger')) {
+        e.stopPropagation();
+        return;
+      }
+
       // 아이콘 드롭다운 옵션 선택
       if (btn.classList.contains('icon-dd-opt') && !btn.classList.contains('palette-opt')) {
         e.stopPropagation();
         var prop = btn.dataset.prop;
         var val = btn.dataset.val;
+        if (prop === 'showAppIcons') {
+          slide.showAppIcons = slide.showAppIcons === false ? true : false;
+          // 드롭다운 닫기
+          toolbar.querySelectorAll('.icon-dropdown-menu.open').forEach(function(m) { m.classList.remove('open'); });
+        }
         if (prop === 'iconShape') slide.iconShape = val;
         if (prop === 'iconSize') slide.iconSize = val;
         if (prop === 'lineIconMode') slide.lineIconMode = val;

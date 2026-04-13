@@ -2633,7 +2633,13 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
 /* ── 앱 아이콘 토글 버튼 ── */
 .st-btn.icon-toggle-btn.active {
   background: #6C5CE7;
-  color: #fff;
+  color: #FFF;
+  border-color: #6C5CE7;
+}
+.icon-toggle-arrow {
+  font-size: 10px;
+  margin-left: 2px;
+  opacity: 0.7;
 }
 
 /* ── 아이콘 설정 드롭다운 ── */

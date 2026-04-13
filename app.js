@@ -1192,8 +1192,9 @@
               ${(slide.chartKind === 'line' || slide.chartKind === 'combo') ? `<div class="icon-dd-section">
                 <div class="icon-dd-label">라인 차트 아이콘 위치</div>
                 <div class="icon-dd-options">
-                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'legend' ? ' active' : ''}" data-prop="lineIconMode" data-val="legend">📋 범례</button>
-                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'endpoint' ? ' active' : ''}" data-prop="lineIconMode" data-val="endpoint">📍 라인 끝</button>
+                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'legend' ? ' active' : ''}" data-prop="lineIconMode" data-val="legend">📋 범례만</button>
+                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'endpoint' ? ' active' : ''}" data-prop="lineIconMode" data-val="endpoint">📍 라인 끝만</button>
+                  <button class="icon-dd-opt${(slide.lineIconMode || 'legend') === 'both' ? ' active' : ''}" data-prop="lineIconMode" data-val="both">📋📍 둘 다</button>
                 </div>
               </div>` : ''}
             </div>

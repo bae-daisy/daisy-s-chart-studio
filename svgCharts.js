@@ -162,13 +162,17 @@ const SvgCharts = {
     const W = T.W, padL = T.EDGE+60, padR = T.EDGE+40;
     // Legend icon mode: calculate extra cBot reduction when icons are in legend
     var _lineIconMode = SvgCharts._lineIconMode || 'legend';
+    var _showInLegend = _lineIconMode === 'legend' || _lineIconMode === 'both';
+    var _showAtEndpoint = _lineIconMode === 'endpoint' || _lineIconMode === 'both';
     var _lnHasIcons = SvgCharts._showAppIcons !== false;
     var _lnIcM = _lnHasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
     var _lnLegendIconExtra = 0;
-    if (_lnHasIcons && _lnIcM && _lineIconMode === 'legend' && SvgCharts._hasLegend) {
+    if (_lnHasIcons && _lnIcM && _showInLegend && SvgCharts._hasLegend) {
       _lnLegendIconExtra = _lnIcM.radius * 2 + 6;
     }
-    const cW = W-padL-padR, cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20 - _lnLegendIconExtra, cH = cBot-cTop;
+    // 라인 끝 아이콘이 있으면 오른쪽 패딩 확보
+    var _endpointPadR = (_lnHasIcons && _lnIcM && _showAtEndpoint) ? (_lnIcM.radius * 2 + 16) : 0;
+    const cW = W-padL-padR-_endpointPadR, cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20 - _lnLegendIconExtra, cH = cBot-cTop;
     const allV = series.flatMap(s=>s.data);
     const mn = Math.min(...allV), mx = Math.max(...allV), rng = mx-mn||1;
     const yMin = Math.max(0, mn-rng*0.1), yMax = mx+rng*0.1, yR = yMax-yMin;
@@ -206,8 +210,8 @@ const SvgCharts = {
     });
     if (SvgCharts._hasLegend) {
     var _legIcShape = SvgCharts._iconShape || 'circle';
-    var _legIconW = (_lnHasIcons && _lnIcM && _lineIconMode === 'legend') ? (_lnIcM.radius * 2 + 6) : 0;
-    var _chipH = (_lnHasIcons && _lnIcM && _lineIconMode === 'legend') ? Math.max(24, _lnIcM.radius * 2 + 8) : 22;
+    var _legIconW = (_lnHasIcons && _lnIcM && _showInLegend) ? (_lnIcM.radius * 2 + 6) : 0;
+    var _chipH = (_lnHasIcons && _lnIcM && _showInLegend) ? Math.max(24, _lnIcM.radius * 2 + 8) : 22;
     var _chipPadX = 7;
     var _chipGap = 8;
     // 칩 너비 계산: 색상점(8) + 간격 + [아이콘 + 간격] + 텍스트 + 패딩
@@ -239,7 +243,7 @@ const SvgCharts = {
         svg += `<circle cx="${cx + 4}" cy="${ly}" r="4" fill="${c}"/>`;
         cx += 8 + 6;
         // 아이콘
-        if (_lnHasIcons && _lnIcM && _lineIconMode === 'legend') {
+        if (_lnHasIcons && _lnIcM && _showInLegend) {
           var _legIcUrl = this._appIcon(s.label);
           if (_legIcUrl) {
             var _legIcClip = 'ln-chip-' + si + '-' + Date.now();
@@ -256,7 +260,7 @@ const SvgCharts = {
     }
     }
     // Endpoint mode: show icons at line endpoints with collision avoidance
-    if (_lnHasIcons && _lnIcM && _lineIconMode === 'endpoint' && labels.length > 0) {
+    if (_lnHasIcons && _lnIcM && _showAtEndpoint && labels.length > 0) {
       var _lnIcShape = SvgCharts._iconShape || 'circle';
       var _lnIcDiam = _lnIcM.radius * 2 + 4;
       // 각 시리즈의 마지막 Y좌표 수집

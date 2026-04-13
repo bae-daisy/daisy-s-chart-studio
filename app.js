@@ -1514,6 +1514,7 @@
       });
       if (meta.appName) names.push(meta.appName.replace('내 앱:', '').trim());
       const unique = [...new Set(names)].filter(n => n && !SvgCharts._appIcon(n));
+      console.log('[아이콘 추출] names:', names, 'unique:', unique);
       if (unique.length > 0) {
         // 아이콘 상태 패널 표시
         const panel = document.createElement('div');

@@ -69,7 +69,7 @@
   // 툴팁 표시 (body에 fixed로 띄움)
   let kindTipEl = null;
   document.addEventListener('mouseenter', function(e) {
-    if (!e.target.classList.contains('kind-tip-trigger')) return;
+    if (!e.target || !e.target.classList || !e.target.classList.contains('kind-tip-trigger')) return;
     if (!kindTipEl) {
       kindTipEl = document.createElement('div');
       kindTipEl.className = 'kind-tip-bubble';
@@ -88,7 +88,7 @@
     kindTipEl.style.top = top + 'px';
   }, true);
   document.addEventListener('mouseleave', function(e) {
-    if (!e.target.classList.contains('kind-tip-trigger')) return;
+    if (!e.target || !e.target.classList || !e.target.classList.contains('kind-tip-trigger')) return;
     if (kindTipEl) kindTipEl.style.display = 'none';
   }, true);
 

@@ -667,6 +667,9 @@
       }
       if (data.length === 0) { showToast('⚠️ 선택 영역에 데이터가 없어요', true); return; }
 
+      // 엑셀 시리얼 넘버 → 날짜 변환
+      Parser._convertExcelDates(headers, data);
+
       const chartKind = Parser.recommendChart('unknown', headers, data);
       const sheetName = sd.name && sd.name !== 'Sheet1' && sd.name !== 'Sheet 1' ? sd.name : '';
 

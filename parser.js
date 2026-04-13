@@ -194,6 +194,9 @@ const Parser = {
     // 숫자 열의 쉼표 제거
     this._cleanNumericCommas(headers, data);
 
+    // 엑셀 시리얼 넘버 → 날짜 변환
+    this._convertExcelDates(headers, data);
+
     // 패키지명 → 앱명 자동 변환
     this._convertPkgToAppName(headers, data);
 
@@ -262,6 +265,9 @@ const Parser = {
     // 숫자 열의 쉼표 제거 (예: "824,403" → "824403")
     this._cleanNumericCommas(headers, data);
 
+    // 엑셀 시리얼 넘버 → 날짜 변환
+    this._convertExcelDates(headers, data);
+
     const type = 'unknown';
     const chartKind = this.recommendChart(type, headers, data);
     this._convertPkgToAppName(headers, data);
@@ -280,6 +286,34 @@ const Parser = {
     }
     const meta = { reportType, filterInfo: '', appName: '' };
     return { type, chartKind, meta, headers, data };
+  },
+
+  // ── 엑셀 시리얼 넘버 → 날짜 변환 ──
+  _convertExcelDates(headers, data) {
+    // 첫 번째 열이 날짜 관련 헤더인지 확인
+    const h0 = (headers[0] || '').trim();
+    const isDateHeader = /^(날짜|기간|date|month|일자|연월)/i.test(h0);
+    if (!isDateHeader) return;
+
+    // 첫 번째 열 값이 엑셀 시리얼 넘버(5자리 숫자, 40000~55000 범위)인지 확인
+    const vals = data.map(r => String(r[0] || '').trim()).filter(v => v !== '');
+    if (vals.length === 0) return;
+    const serialCount = vals.filter(v => /^\d{5}$/.test(v) && Number(v) >= 40000 && Number(v) <= 55000).length;
+    if (serialCount < vals.length * 0.5) return;
+
+    // 변환: 엑셀 시리얼 → YYYY.MM
+    data.forEach(r => {
+      const v = String(r[0] || '').trim();
+      if (/^\d{5}$/.test(v)) {
+        const serial = Number(v);
+        // 엑셀 날짜 기준: 1900-01-01 = 1, 1900-02-29 버그 보정
+        const epoch = new Date(1899, 11, 30);
+        const date = new Date(epoch.getTime() + serial * 86400000);
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        r[0] = yyyy + '.' + mm;
+      }
+    });
   },
 
   // ── 숫자 열의 쉼표 제거 ──

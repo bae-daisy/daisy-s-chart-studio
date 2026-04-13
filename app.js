@@ -1502,13 +1502,16 @@
       const headers = parsed.headers || [];
       const data = parsed.data || [];
       const meta = parsed.meta || {};
-      const _skip = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고)$/;
+      const _skip = /^(순위|값|전체|날짜|분류|남성|여성|\d+대|총|경쟁앱|비율|비고|이탈|유입|유지|사용자|사용량|기간|구분|항목|합계|평균|증감|D|W|M)$/;
+      const _notAppName = /^(이탈|유입|유지|경쟁앱|총\s|전체|사용자|사용량|신규|기존|순위|점유율|증감)/;
       const names = [];
-      headers.slice(1).forEach(h => { if (h && !_skip.test(h)) names.push(h); });
-      data.forEach(r => r.forEach(cell => {
-        const s = String(cell || '').trim();
-        if (s && s.length >= 2 && s.length <= 30 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s)) names.push(s);
-      }));
+      // 헤더(열 이름)에서 앱 이름 추출
+      headers.slice(1).forEach(h => { if (h && !_skip.test(h) && !_notAppName.test(h)) names.push(h); });
+      // 첫 번째 열(행 라벨)에서만 앱 이름 추출
+      data.forEach(r => {
+        const s = String(r[0] || '').trim();
+        if (s && s.length >= 2 && s.length <= 30 && !/^[\d,.%\-+]+$/.test(s) && !_skip.test(s) && !_notAppName.test(s)) names.push(s);
+      });
       if (meta.appName) names.push(meta.appName.replace('내 앱:', '').trim());
       const unique = [...new Set(names)].filter(n => n && !SvgCharts._appIcon(n));
       if (unique.length > 0) {

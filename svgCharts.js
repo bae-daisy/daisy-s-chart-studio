@@ -1227,6 +1227,13 @@ const SvgCharts = {
   _polar(cx,cy,r,deg) { const rad=(deg-90)*Math.PI/180; return {x:cx+r*Math.cos(rad), y:cy+r*Math.sin(rad)}; },
 
   // 패키지명 또는 앱명 → 앱 아이콘 URL (로컬 icons/ 폴더 + API 캐시)
+  // 아이콘 없을 때 기본 플레이스홀더 (앱 이름 첫 글자)
+  _iconPlaceholder(cx, cy, r, label) {
+    const initial = (label || '?').charAt(0);
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#F3F0FF" stroke="${T.divider}" stroke-width="1.5"/>` +
+      `<text x="${cx}" y="${cy + r * 0.35}" text-anchor="middle" font-size="${r * 0.9}" fill="#8B7FC7" font-weight="600">${this._esc(initial)}</text>`;
+  },
+
   // 아이콘 없을 때 로딩 스피너 SVG (원형 회전 애니메이션)
   _iconSpinner(cx, cy, r) {
     const sr = Math.max(8, r * 0.45);
@@ -1265,11 +1272,16 @@ const SvgCharts = {
     return map[nameOrPkg] || this._iconCache[nameOrPkg] || '';
   },
 
+  // 아이콘이 없는 것으로 확정된 앱인지 확인
+  _iconNotFound(name) {
+    return this._iconCache[name] === 'none';
+  },
+
   // API로 앱 아이콘 URL을 미리 로드 (배치 API로 한 번에 요청)
   async preloadAppIcons(appNames) {
     if (!appNames || appNames.length === 0) return;
 
-    const toFetch = appNames.filter(name => name && !this._appIcon(name));
+    const toFetch = appNames.filter(name => name && !this._appIcon(name) && !this._iconNotFound(name));
     if (toFetch.length === 0) return;
 
     // 긴 앱 이름에서 검색용 키워드 추출
@@ -1323,8 +1335,12 @@ const SvgCharts = {
         const results = json.data || {};
         for (const [kw, names] of Object.entries(kwMap)) {
           const list = results[kw];
-          if (!list) continue;
           names.forEach(name => {
+            if (!list || list.length === 0) {
+              // 검색 결과 없음 → 'none'으로 기록하여 재시도 방지
+              if (!this._iconCache[name]) this._iconCache[name] = 'none';
+              return;
+            }
             const app = _bestMatch(list, name);
             if (app) {
               const iconUrl = app.iconUrl || app.icon_url || '';
@@ -1334,7 +1350,11 @@ const SvgCharts = {
                 if (pkg) this._iconCache[pkg] = iconUrl;
                 const appName = app.appName || '';
                 if (appName && appName !== name) this._iconCache[appName] = iconUrl;
+              } else {
+                if (!this._iconCache[name]) this._iconCache[name] = 'none';
               }
+            } else {
+              if (!this._iconCache[name]) this._iconCache[name] = 'none';
             }
           });
         }

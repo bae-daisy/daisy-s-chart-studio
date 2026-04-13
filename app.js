@@ -3340,29 +3340,35 @@
           <div class="guide-modal-step">
             <div class="guide-modal-num">1</div>
             <div>
-              <div class="guide-modal-heading">CSV 파일 업로드</div>
-              <div class="guide-modal-desc">MI-INSIGHT에서 다운받은 CSV 또는 엑셀 파일을 드래그하거나 클릭해서 올려주세요. 여러 파일을 한번에 올릴 수 있어요.<br><span style="color:#E55;font-weight:600">⚠️ 주의: 한 파일에 여러 가지 데이터가 섞여있으면 인식하기 어려워요.</span></div>
+              <div class="guide-modal-heading">데이터 불러오기</div>
+              <div class="guide-modal-desc">두 가지 방법으로 데이터를 불러올 수 있어요.<br>
+                <b>📁 파일 업로드</b> — CSV 또는 엑셀(.xlsx) 파일을 드래그하거나 클릭해서 올려주세요. 여러 파일을 한번에 올릴 수 있어요.<br>
+                <b>🔍 API 조회</b> — MI-INSIGHT API를 통해 실시간 데이터를 직접 조회할 수 있어요. 카테고리, 기간, 앱을 선택하면 바로 차트가 생성됩니다.<br>
+                <span style="color:#E55;font-weight:600">⚠️ 주의: 한 파일에 여러 가지 데이터가 섞여있으면 인식하기 어려워요.</span></div>
             </div>
           </div>
           <div class="guide-modal-step">
             <div class="guide-modal-num">2</div>
             <div>
-              <div class="guide-modal-heading">자동 차트 생성</div>
-              <div class="guide-modal-desc">데이터 유형을 자동으로 감지해서 가장 적합한 차트를 추천해드려요. 라인, 바, 도넛, 히트맵 등 13가지 차트를 지원합니다.</div>
+              <div class="guide-modal-heading">엑셀 데이터 범위 선택</div>
+              <div class="guide-modal-desc">엑셀 파일을 올리면 스프레드시트 뷰어가 열려요. 원하는 영역을 드래그해서 선택하면 해당 범위만 차트로 만들어줍니다. 헤더 행을 포함해서 선택해주세요.<br>
+                <span style="color:var(--accent);font-weight:600">💡 엑셀 날짜가 숫자(45658 등)로 보여도 자동으로 날짜(2025.01)로 변환돼요.</span></div>
             </div>
           </div>
           <div class="guide-modal-step">
             <div class="guide-modal-num">3</div>
             <div>
-              <div class="guide-modal-heading">장표 설정</div>
-              <div class="guide-modal-desc">장표에 마우스를 올리면 ⚙️ 설정 버튼이 나타나요. 차트 유형 변경, 타이틀 수정, 데이터 범위 조절, 색상 변경이 가능합니다.</div>
+              <div class="guide-modal-heading">자동 차트 생성</div>
+              <div class="guide-modal-desc">데이터 유형을 자동으로 감지해서 가장 적합한 차트를 추천해드려요. 라인, 바, 도넛, 히트맵 등 13가지 차트를 지원합니다. 앱 아이콘도 자동으로 불러와요.</div>
             </div>
           </div>
           <div class="guide-modal-step">
             <div class="guide-modal-num">4</div>
             <div>
-              <div class="guide-modal-heading">텍스트 수정</div>
-              <div class="guide-modal-desc">Aa 텍스트 수정 버튼을 누르면 차트 안의 글자를 직접 클릭해서 수정할 수 있어요.</div>
+              <div class="guide-modal-heading">장표 설정 & 편집</div>
+              <div class="guide-modal-desc">장표에 마우스를 올리면 ⚙️ 설정 버튼이 나타나요. 차트 유형 변경, 타이틀 수정, 데이터 범위 조절, 색상 변경, 아이콘 ON/OFF가 가능합니다.<br>
+                <b>📊 데이터 다시 선택</b> — 이미 만든 장표의 데이터 범위를 다시 선택할 수 있어요.<br>
+                <b>Aa 텍스트 편집</b> — 차트 안의 글자를 직접 클릭해서 수정할 수 있어요.</div>
             </div>
           </div>
           <div class="guide-modal-step">

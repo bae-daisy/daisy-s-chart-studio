@@ -1599,19 +1599,32 @@
         const svgEl = chartEl.querySelector('svg');
         if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
         showToast('🔄 아이콘 변환 중...');
-        // 1단계: SVG 내 모든 image의 href를 base64로 변환
+        // SVG 내 모든 image href를 base64로 변환
         const images = Array.from(svgEl.querySelectorAll('image'));
         const convertAll = images.map(img => {
           const href = img.getAttribute('href') || '';
           if (!href || href.startsWith('data:')) return Promise.resolve();
-          // 프록시 URL → JSON API로 base64 가져오기
-          if (href.includes('/api/icon?')) {
-            const jsonUrl = href.replace('&raw=1', '');
+          // _iconCache에서 base64 찾기 (이름으로 역검색)
+          for (const [k, v] of Object.entries(SvgCharts._iconCache || {})) {
+            if (v === href && SvgCharts._iconCache[k]) {
+              // 같은 앱의 다른 캐시 키에 base64가 있을 수 있음
+              for (const [k2, v2] of Object.entries(SvgCharts._iconCache)) {
+                if (v2.startsWith('data:') && (k2 === k || k2.includes(k) || k.includes(k2))) {
+                  img.setAttribute('href', v2);
+                  return Promise.resolve();
+                }
+              }
+            }
+          }
+          // 프록시 URL → Render 서버 API로 base64 가져오기
+          if (href.includes('/api/icon?') || href.includes('/icon?url=')) {
+            const apiBase = ApiClient.BASE_URL || '/api';
+            const jsonUrl = href.replace('&raw=1', '').replace(apiBase, ApiClient.BASE_URL);
             return fetch(jsonUrl).then(r => r.json()).then(j => {
-              if (j.success && j.data) { img.setAttribute('href', j.data); }
+              if (j.success && j.data) img.setAttribute('href', j.data);
             }).catch(() => {});
           }
-          // 로컬/외부 URL → canvas로 변환
+          // 로컬 URL → canvas로 변환
           return new Promise(resolve => {
             const c = document.createElement('canvas'), ctx = c.getContext('2d');
             const im = new Image(); im.crossOrigin = 'anonymous';

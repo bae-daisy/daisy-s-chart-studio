@@ -1385,7 +1385,8 @@ const SvgCharts = {
             if (app) {
               // base64 아이콘 우선, 없으면 프록시 URL
               const iconB64 = app.iconBase64 || '';
-              const finalIcon = iconB64;
+              const iconUrl = app.iconUrl || app.icon_url || '';
+              const finalIcon = iconB64 || (iconUrl ? ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl) + '&raw=1' : '');
               if (finalIcon) {
                 console.log('[아이콘] ✅', name, '→', finalIcon.startsWith('data:') ? 'base64(' + finalIcon.length + ')' : finalIcon.slice(0, 60));
                 this._iconCache[name] = finalIcon;

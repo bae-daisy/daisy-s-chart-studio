@@ -3753,8 +3753,12 @@
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
 
-  // 온보딩 콜아웃
-  document.getElementById('guideCallout').addEventListener('click', openGuideModal);
+  // 온보딩 콜아웃 → 가이드 섹션으로 스크롤
+  document.getElementById('guideCallout').addEventListener('click', function(e) {
+    e.preventDefault();
+    var guide = document.querySelector('.landing-guide');
+    if (guide) guide.scrollIntoView({ behavior: 'smooth' });
+  });
   // 결과 화면 헤더 버튼
   document.getElementById('guideBtn').addEventListener('click', openGuideModal);
 

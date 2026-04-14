@@ -1578,15 +1578,22 @@
         const chartEl = chartArea.querySelector('.chart-slide');
         const svgEl = chartEl.querySelector('svg');
         if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
+        showToast('🔄 아이콘을 인라인 변환 중...');
         inlineSvgImages(svgEl).then(() => {
           const str = new XMLSerializer().serializeToString(svgEl);
+          // SVG 파일로 다운로드 (피그마에 드래그로 가져오기)
+          const blob = new Blob([str], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '.svg';
+          a.click();
+          URL.revokeObjectURL(url);
+          // 클립보드에도 복사 시도
           navigator.clipboard.writeText(str).then(() => {
-            showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
+            showToast('✅ SVG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>하거나 <b>Cmd+V</b>로 붙여넣으세요</span>');
           }).catch(() => {
-            // 폴백: textarea로 복사
-            const ta = document.createElement('textarea');
-            ta.value = str; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
-            showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
+            showToast('✅ SVG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>해서 가져오세요</span>');
           });
         });
         return;

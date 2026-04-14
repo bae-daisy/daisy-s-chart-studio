@@ -104,6 +104,15 @@
     return Promise.all(Array.from(images).map(img => {
       const href = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
       if (!href || href.startsWith('data:')) return Promise.resolve();
+      // 프록시 URL이면 fetch로 base64 가져오기
+      if (href.includes('/api/icon?') && !href.includes('raw=1')) {
+        return fetch(href).then(r => r.json()).then(j => {
+          if (j.success && j.data) {
+            img.setAttribute('href', j.data);
+            img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          }
+        }).catch(() => {});
+      }
       return new Promise(resolve => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -120,7 +129,18 @@
           } catch(e) { /* CORS 실패 시 무시 */ }
           resolve();
         };
-        imgEl.onerror = () => resolve();
+        imgEl.onerror = () => {
+          // canvas 실패 시 fetch로 재시도 (프록시 URL 등)
+          if (href.includes('/api/icon?') || href.startsWith('/')) {
+            fetch(href.includes('raw=1') ? href.replace('&raw=1','') : href)
+              .then(r => r.json()).then(j => {
+                if (j.success && j.data) {
+                  img.setAttribute('href', j.data);
+                  img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+                }
+              }).catch(() => {}).finally(resolve);
+          } else { resolve(); }
+        };
         imgEl.src = href;
       });
     }));

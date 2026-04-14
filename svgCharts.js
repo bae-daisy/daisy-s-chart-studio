@@ -1292,7 +1292,7 @@ const SvgCharts = {
       'Watcha': 'icons/watcha.png',
     };
     var cached = this._iconCache[nameOrPkg];
-    var validCached = (cached && cached !== 'none' && (cached.startsWith('data:') || cached.startsWith('icons/') || (cached.includes('/api/icon?') && cached.includes('raw=1')))) ? cached : '';
+    var validCached = (cached && cached !== 'none' && (cached.startsWith('data:') || cached.startsWith('icons/'))) ? cached : '';
     return map[nameOrPkg] || validCached || '';
   },
 
@@ -1354,6 +1354,7 @@ const SvgCharts = {
       // 3개씩 나눠서 순차 요청
       const CHUNK = 3;
       const allResults = {};
+      const _pendingIconFetches = [];
       for (let i = 0; i < keywords.length; i += CHUNK) {
         const chunk = keywords.slice(i, i + CHUNK);
         try {
@@ -1383,17 +1384,20 @@ const SvgCharts = {
             }
             const app = _bestMatch(list, name);
             if (app) {
-              // base64 아이콘 우선, 없으면 프록시 URL
               const iconB64 = app.iconBase64 || '';
               const iconUrl = app.iconUrl || app.icon_url || '';
-              const finalIcon = iconB64 || (iconUrl ? ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(iconUrl) + '&raw=1' : '');
-              if (finalIcon) {
-                console.log('[아이콘] ✅', name, '→', finalIcon.startsWith('data:') ? 'base64(' + finalIcon.length + ')' : finalIcon.slice(0, 60));
-                this._iconCache[name] = finalIcon;
+              if (iconB64) {
+                // base64 아이콘 직접 저장
+                console.log('[아이콘] ✅', name, '→ base64(' + iconB64.length + ')');
+                this._iconCache[name] = iconB64;
                 const pkg = app.pkgName || app.pkg_name || '';
-                if (pkg) this._iconCache[pkg] = finalIcon;
+                if (pkg) this._iconCache[pkg] = iconB64;
                 const appName = app.appName || '';
-                if (appName && appName !== name) this._iconCache[appName] = finalIcon;
+                if (appName && appName !== name) this._iconCache[appName] = iconB64;
+              } else if (iconUrl) {
+                // base64 변환 실패 → 서버 JSON API로 개별 요청
+                console.log('[아이콘] 🔄', name, '→ 서버에서 base64 변환 시도');
+                _pendingIconFetches.push({ name, iconUrl, pkg: app.pkgName || app.pkg_name || '', appName: app.appName || '' });
               } else {
                 console.log('[아이콘] ❌', name, '→ 아이콘 URL 없음');
               }
@@ -1401,6 +1405,21 @@ const SvgCharts = {
               console.log('[아이콘] ❌', name, '→ 매칭 앱 없음');
             }
           });
+        }
+        // base64 변환 실패한 아이콘을 서버 JSON API로 개별 변환
+        for (const p of _pendingIconFetches) {
+          try {
+            const resp = await fetch(ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(p.iconUrl));
+            if (resp.ok) {
+              const j = await resp.json();
+              if (j.success && j.data) {
+                this._iconCache[p.name] = j.data;
+                if (p.pkg) this._iconCache[p.pkg] = j.data;
+                if (p.appName && p.appName !== p.name) this._iconCache[p.appName] = j.data;
+                console.log('[아이콘] ✅', p.name, '→ 서버 변환 성공');
+              }
+            }
+          } catch(e) { /* 개별 실패 무시 */ }
         }
         try { localStorage.setItem('cs-icon-cache', JSON.stringify(this._iconCache)); } catch(e) {}
     } catch(e) { /* 무시 */ }

@@ -587,6 +587,7 @@ app.get('/api/icon', async (req, res) => {
     // ?raw=1 → 이미지 바이너리 직접 반환 (SVG <image href>에서 사용 가능)
     if (req.query.raw === '1') {
       res.setHeader('Content-Type', contentType);
+      res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(buffer);
     }
 

@@ -1639,6 +1639,25 @@
           });
         });
         Promise.all(convertAll).then(() => {
+          // 2차 패스: 아직 data:가 아닌 이미지를 서버 JSON API로 재시도
+          const remaining = Array.from(svgEl.querySelectorAll('image')).filter(img => {
+            const h = img.getAttribute('href') || '';
+            return h && !h.startsWith('data:');
+          });
+          return Promise.all(remaining.map(img => {
+            const href = img.getAttribute('href') || '';
+            // 원본 외부 URL 추출 (프록시 URL에서)
+            let extUrl = '';
+            try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e) {}
+            if (!extUrl && href.startsWith('http')) extUrl = href;
+            if (!extUrl) return Promise.resolve();
+            // 서버 JSON API로 base64 가져오기
+            const apiUrl = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl);
+            return fetch(apiUrl).then(r => r.json()).then(j => {
+              if (j.success && j.data) img.setAttribute('href', j.data);
+            }).catch(() => {});
+          }));
+        }).then(() => {
           const str = new XMLSerializer().serializeToString(svgEl);
           const ta = document.createElement('textarea');
           ta.value = str;

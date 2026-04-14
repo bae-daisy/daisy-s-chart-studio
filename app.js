@@ -1599,9 +1599,34 @@
         const svgEl = chartEl.querySelector('svg');
         if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
         showToast('🔄 아이콘 변환 중...');
-        inlineSvgImages(svgEl).then(() => {
+        // 1단계: SVG 내 모든 image의 href를 base64로 변환
+        const images = Array.from(svgEl.querySelectorAll('image'));
+        const convertAll = images.map(img => {
+          const href = img.getAttribute('href') || '';
+          if (!href || href.startsWith('data:')) return Promise.resolve();
+          // 프록시 URL → JSON API로 base64 가져오기
+          if (href.includes('/api/icon?')) {
+            const jsonUrl = href.replace('&raw=1', '');
+            return fetch(jsonUrl).then(r => r.json()).then(j => {
+              if (j.success && j.data) { img.setAttribute('href', j.data); }
+            }).catch(() => {});
+          }
+          // 로컬/외부 URL → canvas로 변환
+          return new Promise(resolve => {
+            const c = document.createElement('canvas'), ctx = c.getContext('2d');
+            const im = new Image(); im.crossOrigin = 'anonymous';
+            im.onload = () => {
+              c.width = im.naturalWidth || 64; c.height = im.naturalHeight || 64;
+              ctx.drawImage(im, 0, 0);
+              try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {}
+              resolve();
+            };
+            im.onerror = resolve;
+            im.src = href;
+          });
+        });
+        Promise.all(convertAll).then(() => {
           const str = new XMLSerializer().serializeToString(svgEl);
-          // textarea 폴백으로 확실하게 복사
           const ta = document.createElement('textarea');
           ta.value = str;
           ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
@@ -1609,7 +1634,6 @@
           ta.select();
           document.execCommand('copy');
           ta.remove();
-          // 최신 API도 시도
           try { navigator.clipboard.writeText(str); } catch(e) {}
           showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
         });

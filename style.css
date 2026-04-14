@@ -1,10 +1,8 @@
-/* ── Freesentation 폰트 ── */
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-4Regular.ttf') format('truetype'); font-weight: 400; font-display: block; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-5Medium.ttf') format('truetype'); font-weight: 500; font-display: block; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-6SemiBold.ttf') format('truetype'); font-weight: 600; font-display: block; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-7Bold.ttf') format('truetype'); font-weight: 700; font-display: block; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-8ExtraBold.ttf') format('truetype'); font-weight: 800; font-display: block; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-9Black.ttf') format('truetype'); font-weight: 900; font-display: block; }
+/* ── Freesentation 폰트 (WOFF2) ── */
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-SemiBold.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-ExtraBold.woff2') format('woff2'); font-weight: 800; font-display: swap; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 

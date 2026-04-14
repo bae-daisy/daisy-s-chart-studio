@@ -1,10 +1,10 @@
 /* ── Freesentation 폰트 ── */
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-4Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-5Medium.ttf') format('truetype'); font-weight: 500; font-display: swap; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-6SemiBold.ttf') format('truetype'); font-weight: 600; font-display: swap; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-7Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-8ExtraBold.ttf') format('truetype'); font-weight: 800; font-display: swap; }
-@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-9Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-4Regular.ttf') format('truetype'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-5Medium.ttf') format('truetype'); font-weight: 500; font-display: block; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-6SemiBold.ttf') format('truetype'); font-weight: 600; font-display: block; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-7Bold.ttf') format('truetype'); font-weight: 700; font-display: block; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-8ExtraBold.ttf') format('truetype'); font-weight: 800; font-display: block; }
+@font-face { font-family: 'Freesentation'; src: url('fonts/Freesentation-9Black.ttf') format('truetype'); font-weight: 900; font-display: block; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -22,7 +22,7 @@
 }
 
 body {
-  font-family: 'Freesentation', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Freesentation', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -606,7 +606,7 @@ body {
   border-radius: 4px;
   background: rgba(255,255,255,0.95);
   color: var(--text);
-  font-family: 'Pretendard', -apple-system, sans-serif;
+  font-family: 'Freesentation', -apple-system, sans-serif;
   padding: 2px 4px;
   outline: none;
   box-shadow: 0 2px 8px rgba(108,92,231,0.2);
@@ -1654,7 +1654,7 @@ tr[data-rowrole="ignore"] .ie-preview-td { opacity: 0.2; text-decoration: line-t
   position: fixed; inset: 0; z-index: 99999;
   background: linear-gradient(135deg, #F8F7FF 0%, #EDE9FE 100%);
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Pretendard', -apple-system, sans-serif;
+  font-family: 'Freesentation', -apple-system, sans-serif;
 }
 .lock-panel {
   text-align: center; padding: 48px 40px;

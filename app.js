@@ -104,15 +104,14 @@
     return Promise.all(Array.from(images).map(img => {
       const href = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
       if (!href || href.startsWith('data:')) return Promise.resolve();
-      if (!/^https?:\/\//i.test(href)) return Promise.resolve();
       return new Promise(resolve => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const imgEl = new Image();
         imgEl.crossOrigin = 'anonymous';
         imgEl.onload = () => {
-          canvas.width = imgEl.naturalWidth;
-          canvas.height = imgEl.naturalHeight;
+          canvas.width = imgEl.naturalWidth || 64;
+          canvas.height = imgEl.naturalHeight || 64;
           ctx.drawImage(imgEl, 0, 0);
           try {
             const dataUrl = canvas.toDataURL('image/png');

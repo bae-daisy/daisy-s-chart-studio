@@ -1592,48 +1592,51 @@
         });
         return;
       }
-      // 피그마 (SVG 복사 — 아이콘만 PNG base64로 변환)
+      // 피그마 (SVG 복사 — 아이콘 href를 캐시의 base64로 교체)
       if (btn.classList.contains('figma-btn')) {
         e.stopPropagation();
         const chartEl = chartArea.querySelector('.chart-slide');
         const svgEl = chartEl.querySelector('svg');
         if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
         showToast('🔄 아이콘 변환 중...');
-        // 각 <image>를 개별 canvas로 캡처하여 base64 변환
-        const images = Array.from(svgEl.querySelectorAll('image'));
-        const convertAll = images.map(img => {
+        // SVG 복제
+        const clone = svgEl.cloneNode(true);
+        // 모든 <image>의 href를 _iconCache base64로 교체
+        const images = Array.from(clone.querySelectorAll('image'));
+        const pending = [];
+        images.forEach(img => {
           const href = img.getAttribute('href') || '';
-          if (!href || href.startsWith('data:')) return Promise.resolve();
-          // 화면에 렌더링된 이미지를 canvas로 캡처
-          return new Promise(resolve => {
-            const w = parseInt(img.getAttribute('width')) || 64;
-            const h = parseInt(img.getAttribute('height')) || 64;
-            const c = document.createElement('canvas');
-            c.width = w * 2; c.height = h * 2;
-            const ctx = c.getContext('2d');
-            const im = new Image();
-            im.crossOrigin = 'anonymous';
-            im.onload = () => {
-              ctx.drawImage(im, 0, 0, c.width, c.height);
-              try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {}
-              resolve();
-            };
-            im.onerror = () => {
-              // CORS 실패 → 서버 API로 base64 가져오기
-              let extUrl = '';
-              try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e2) {}
-              if (!extUrl && href.startsWith('http')) extUrl = href;
-              if (extUrl) {
-                fetch(ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl))
-                  .then(r => r.json()).then(j => { if (j.success && j.data) img.setAttribute('href', j.data); })
-                  .catch(() => {}).finally(resolve);
-              } else { resolve(); }
-            };
-            im.src = href;
-          });
+          if (href.startsWith('data:')) return; // 이미 base64
+          // _iconCache에서 이 href와 매칭되는 base64 찾기
+          let found = false;
+          for (const [k, v] of Object.entries(SvgCharts._iconCache || {})) {
+            if (v && v.startsWith('data:') && (v === href || k === href)) {
+              img.setAttribute('href', v); found = true; break;
+            }
+          }
+          if (found) return;
+          // href가 로컬 icons/ 경로면 canvas로 변환
+          if (href.startsWith('icons/')) {
+            pending.push(new Promise(resolve => {
+              const c = document.createElement('canvas'), ctx = c.getContext('2d');
+              const im = new Image();
+              im.onload = () => { c.width = im.naturalWidth; c.height = im.naturalHeight; ctx.drawImage(im, 0, 0); try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {} resolve(); };
+              im.onerror = resolve;
+              im.src = href;
+            }));
+            return;
+          }
+          // 서버 API로 base64 가져오기
+          let extUrl = '';
+          try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e) {}
+          if (!extUrl && href.startsWith('http')) extUrl = href;
+          if (extUrl) {
+            pending.push(fetch(ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl))
+              .then(r => r.json()).then(j => { if (j.success && j.data) img.setAttribute('href', j.data); }).catch(() => {}));
+          }
         });
-        Promise.all(convertAll).then(() => {
-          const str = new XMLSerializer().serializeToString(svgEl);
+        Promise.all(pending).then(() => {
+          const str = new XMLSerializer().serializeToString(clone);
           const ta = document.createElement('textarea');
           ta.value = str;
           ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';

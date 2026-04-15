@@ -1592,82 +1592,39 @@
         });
         return;
       }
-      // 피그마에서 열기 (SVG 클립보드 복사)
+      // 피그마 (PNG 이미지로 클립보드 복사)
       if (btn.classList.contains('figma-btn')) {
         e.stopPropagation();
         const chartEl = chartArea.querySelector('.chart-slide');
+        if (!chartEl) { showToast('⚠️ 차트를 찾을 수 없어요', true); return; }
+        showToast('🔄 이미지 변환 중...');
         const svgEl = chartEl.querySelector('svg');
-        if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
-        showToast('🔄 아이콘 변환 중...');
-        // SVG 내 모든 image href를 base64로 변환
-        const images = Array.from(svgEl.querySelectorAll('image'));
-        const convertAll = images.map(img => {
-          const href = img.getAttribute('href') || '';
-          if (!href || href.startsWith('data:')) return Promise.resolve();
-          // _iconCache에서 base64 찾기 (이름으로 역검색)
-          for (const [k, v] of Object.entries(SvgCharts._iconCache || {})) {
-            if (v === href && SvgCharts._iconCache[k]) {
-              // 같은 앱의 다른 캐시 키에 base64가 있을 수 있음
-              for (const [k2, v2] of Object.entries(SvgCharts._iconCache)) {
-                if (v2.startsWith('data:') && (k2 === k || k2.includes(k) || k.includes(k2))) {
-                  img.setAttribute('href', v2);
-                  return Promise.resolve();
-                }
-              }
+        const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
+        prep.then(() => html2canvas(chartEl, { scale: 3, backgroundColor: '#FFFFFF', useCORS: true })).then(canvas => {
+          canvas.toBlob(blob => {
+            if (!blob) { showToast('⚠️ 이미지 변환 실패', true); return; }
+            try {
+              navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+              ]).then(() => {
+                showToast('✅ 이미지가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
+              }).catch(() => {
+                // 폴백: PNG 파일 다운로드
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '_figma.png';
+                a.click();
+                showToast('✅ PNG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>해서 가져오세요</span>');
+              });
+            } catch(e) {
+              // ClipboardItem 미지원 브라우저
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '_figma.png';
+              a.click();
+              showToast('✅ PNG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>해서 가져오세요</span>');
             }
-          }
-          // 프록시 URL → Render 서버 API로 base64 가져오기
-          if (href.includes('/api/icon?') || href.includes('/icon?url=')) {
-            const apiBase = ApiClient.BASE_URL || '/api';
-            const jsonUrl = href.replace('&raw=1', '').replace(apiBase, ApiClient.BASE_URL);
-            return fetch(jsonUrl).then(r => r.json()).then(j => {
-              if (j.success && j.data) img.setAttribute('href', j.data);
-            }).catch(() => {});
-          }
-          // 로컬 URL → canvas로 변환
-          return new Promise(resolve => {
-            const c = document.createElement('canvas'), ctx = c.getContext('2d');
-            const im = new Image(); im.crossOrigin = 'anonymous';
-            im.onload = () => {
-              c.width = im.naturalWidth || 64; c.height = im.naturalHeight || 64;
-              ctx.drawImage(im, 0, 0);
-              try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {}
-              resolve();
-            };
-            im.onerror = resolve;
-            im.src = href;
-          });
-        });
-        Promise.all(convertAll).then(() => {
-          // 2차 패스: 아직 data:가 아닌 이미지를 서버 JSON API로 재시도
-          const remaining = Array.from(svgEl.querySelectorAll('image')).filter(img => {
-            const h = img.getAttribute('href') || '';
-            return h && !h.startsWith('data:');
-          });
-          return Promise.all(remaining.map(img => {
-            const href = img.getAttribute('href') || '';
-            // 원본 외부 URL 추출 (프록시 URL에서)
-            let extUrl = '';
-            try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e) {}
-            if (!extUrl && href.startsWith('http')) extUrl = href;
-            if (!extUrl) return Promise.resolve();
-            // 서버 JSON API로 base64 가져오기
-            const apiUrl = ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl);
-            return fetch(apiUrl).then(r => r.json()).then(j => {
-              if (j.success && j.data) img.setAttribute('href', j.data);
-            }).catch(() => {});
-          }));
-        }).then(() => {
-          const str = new XMLSerializer().serializeToString(svgEl);
-          const ta = document.createElement('textarea');
-          ta.value = str;
-          ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          ta.remove();
-          try { navigator.clipboard.writeText(str); } catch(e) {}
-          showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
+          }, 'image/png');
         });
         return;
       }

@@ -22,8 +22,8 @@ const T = {
     const hl = SvgCharts && SvgCharts._hasLegend;
     const hs = SvgCharts && SvgCharts._hasSource;
     if (!hl && !hs) return 680;
-    if (!hl) return 650;
-    return 600;
+    if (!hl) return 660;
+    return 650;
   },
 
   // 색상 팔레트 프리셋 — 기본색 + 명도 단계 자동 생성

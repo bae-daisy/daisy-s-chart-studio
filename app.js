@@ -1592,39 +1592,57 @@
         });
         return;
       }
-      // 피그마 (PNG 이미지로 클립보드 복사)
+      // 피그마 (SVG 복사 — 아이콘만 PNG base64로 변환)
       if (btn.classList.contains('figma-btn')) {
         e.stopPropagation();
         const chartEl = chartArea.querySelector('.chart-slide');
-        if (!chartEl) { showToast('⚠️ 차트를 찾을 수 없어요', true); return; }
-        showToast('🔄 이미지 변환 중...');
         const svgEl = chartEl.querySelector('svg');
-        const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
-        prep.then(() => html2canvas(chartEl, { scale: 3, backgroundColor: '#FFFFFF', useCORS: true })).then(canvas => {
-          canvas.toBlob(blob => {
-            if (!blob) { showToast('⚠️ 이미지 변환 실패', true); return; }
-            try {
-              navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob })
-              ]).then(() => {
-                showToast('✅ 이미지가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
-              }).catch(() => {
-                // 폴백: PNG 파일 다운로드
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '_figma.png';
-                a.click();
-                showToast('✅ PNG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>해서 가져오세요</span>');
-              });
-            } catch(e) {
-              // ClipboardItem 미지원 브라우저
-              const a = document.createElement('a');
-              a.href = URL.createObjectURL(blob);
-              a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '_figma.png';
-              a.click();
-              showToast('✅ PNG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>해서 가져오세요</span>');
-            }
-          }, 'image/png');
+        if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
+        showToast('🔄 아이콘 변환 중...');
+        // 각 <image>를 개별 canvas로 캡처하여 base64 변환
+        const images = Array.from(svgEl.querySelectorAll('image'));
+        const convertAll = images.map(img => {
+          const href = img.getAttribute('href') || '';
+          if (!href || href.startsWith('data:')) return Promise.resolve();
+          // 화면에 렌더링된 이미지를 canvas로 캡처
+          return new Promise(resolve => {
+            const w = parseInt(img.getAttribute('width')) || 64;
+            const h = parseInt(img.getAttribute('height')) || 64;
+            const c = document.createElement('canvas');
+            c.width = w * 2; c.height = h * 2;
+            const ctx = c.getContext('2d');
+            const im = new Image();
+            im.crossOrigin = 'anonymous';
+            im.onload = () => {
+              ctx.drawImage(im, 0, 0, c.width, c.height);
+              try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {}
+              resolve();
+            };
+            im.onerror = () => {
+              // CORS 실패 → 서버 API로 base64 가져오기
+              let extUrl = '';
+              try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e2) {}
+              if (!extUrl && href.startsWith('http')) extUrl = href;
+              if (extUrl) {
+                fetch(ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl))
+                  .then(r => r.json()).then(j => { if (j.success && j.data) img.setAttribute('href', j.data); })
+                  .catch(() => {}).finally(resolve);
+              } else { resolve(); }
+            };
+            im.src = href;
+          });
+        });
+        Promise.all(convertAll).then(() => {
+          const str = new XMLSerializer().serializeToString(svgEl);
+          const ta = document.createElement('textarea');
+          ta.value = str;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          try { navigator.clipboard.writeText(str); } catch(e) {}
+          showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
         });
         return;
       }

@@ -450,7 +450,7 @@ const SvgCharts = {
       const s = this._polar(CX,CY,R,start), e = this._polar(CX,CY,R,cum);
       const is2 = this._polar(CX,CY,IR,cum), ie = this._polar(CX,CY,IR,start);
       const large = angle>180?1:0, c = T.DONUT[i%T.DONUT.length];
-      svg += `<path d="M ${s.x} ${s.y} A ${R} ${R} 0 ${large} 1 ${e.x} ${e.y} L ${is2.x} ${is2.y} A ${IR} ${IR} 0 ${large} 0 ${ie.x} ${ie.y} Z" fill="${c}"/>`;
+      svg += `<path d="M ${s.x} ${s.y} A ${R} ${R} 0 ${large} 1 ${e.x} ${e.y} L ${is2.x} ${is2.y} A ${IR} ${IR} 0 ${large} 0 ${ie.x} ${ie.y} Z" fill="${c}" pointer-events="none"/>`;
       if (angle>18 && !SvgCharts._hideValueLabels) { const dp=SvgCharts._decimalPlaces!=null?SvgCharts._decimalPlaces:1; const mp=this._polar(CX,CY,(R+IR)/2,mid); svg+=`<text x="${mp.x}" y="${mp.y+5}" text-anchor="middle" fill="#FFF" font-size="${angle>50?14:12}" font-weight="700">${(seg.value/total*100).toFixed(dp)}%</text>`; }
     });
     const legL = CX+R+60, legTop = CY-segments.length*22;

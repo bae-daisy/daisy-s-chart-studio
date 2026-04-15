@@ -1253,7 +1253,7 @@
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
-          <button class="st-btn figma-btn" title="SVG 다운로드 → 피그마에 드래그">🎨 피그마용 SVG</button>
+          <button class="st-btn figma-btn" title="SVG를 클립보드에 복사 → 피그마에서 붙여넣기">🎨 피그마</button>
           <button class="st-btn del-btn" title="삭제">🗑️</button>
         </div>
       `;
@@ -1612,7 +1612,7 @@
         });
         return;
       }
-      // 피그마 (SVG 파일 다운로드 → 피그마에 드래그)
+      // 피그마 (SVG 클립보드 복사 — 아이콘 webp→png 변환)
       if (btn.classList.contains('figma-btn')) {
         e.stopPropagation();
         const chartEl = chartArea.querySelector('.chart-slide');
@@ -1621,13 +1621,12 @@
         showToast('🔄 아이콘 변환 중...');
         inlineSvgImages(svgEl).then(() => {
           const str = new XMLSerializer().serializeToString(svgEl);
-          const blob = new Blob([str], { type: 'image/svg+xml' });
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '.svg';
-          a.click();
-          URL.revokeObjectURL(a.href);
-          showToast('✅ SVG 파일 다운로드 완료!<br><span style="font-size:12px;opacity:0.85">피그마에 <b>파일을 드래그</b>해서 가져오세요 (아이콘 포함)</span>');
+          const ta = document.createElement('textarea');
+          ta.value = str;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+          try { navigator.clipboard.writeText(str); } catch(e) {}
+          showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
         });
         return;
       }

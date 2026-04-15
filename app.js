@@ -1592,33 +1592,84 @@
         });
         return;
       }
-      // 피그마 (PNG 이미지로 클립보드 복사 — 아이콘 100% 포함)
+      // 피그마 (SVG 복사 — <image>를 <pattern> fill로 변환)
       if (btn.classList.contains('figma-btn')) {
         e.stopPropagation();
         const chartEl = chartArea.querySelector('.chart-slide');
-        if (!chartEl) { showToast('⚠️ 차트를 찾을 수 없어요', true); return; }
-        showToast('🔄 이미지 준비 중...');
         const svgEl = chartEl.querySelector('svg');
-        const prep = svgEl ? inlineSvgImages(svgEl) : Promise.resolve();
-        prep.then(() => html2canvas(chartEl, { scale: 3, backgroundColor: '#FFFFFF', useCORS: true, allowTaint: true })).then(canvas => {
-          canvas.toBlob(blob => {
-            if (!blob) { showToast('⚠️ 이미지 변환 실패', true); return; }
-            try {
-              navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
-                showToast('✅ 이미지가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요 (3x 고해상도)</span>');
-              }).catch(() => {
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '_figma.png';
-                a.click();
-                showToast('✅ PNG 다운로드 완료! 피그마에 드래그하세요');
-              });
-            } catch(e) {
-              const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-              a.download = (slide.title || 'chart').replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().slice(0, 30) + '_figma.png';
-              a.click();
-              showToast('✅ PNG 다운로드 완료! 피그마에 드래그하세요');
+        if (!svgEl) { showToast('⚠️ SVG 차트만 지원해요', true); return; }
+        showToast('🔄 아이콘 변환 중...');
+        const clone = svgEl.cloneNode(true);
+        // 1단계: 모든 <image> href를 base64로 변환
+        const images = Array.from(clone.querySelectorAll('image'));
+        const pending = images.map(img => {
+          const href = img.getAttribute('href') || '';
+          if (!href || href.startsWith('data:')) return Promise.resolve();
+          if (href.startsWith('icons/')) {
+            return new Promise(resolve => {
+              const c = document.createElement('canvas'), ctx = c.getContext('2d'), im = new Image();
+              im.onload = () => { c.width = im.naturalWidth; c.height = im.naturalHeight; ctx.drawImage(im, 0, 0); try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {} resolve(); };
+              im.onerror = resolve; im.src = href;
+            });
+          }
+          // 캐시에서 base64 찾기
+          for (const v of Object.values(SvgCharts._iconCache || {})) {
+            if (v && v.startsWith('data:')) {
+              // href와 매칭되는 캐시 찾기
+              for (const [k2, v2] of Object.entries(SvgCharts._iconCache)) {
+                if (v2 === href || (v2.startsWith('data:') && k2 === href)) { img.setAttribute('href', v2); return Promise.resolve(); }
+              }
             }
-          }, 'image/png');
+          }
+          // 서버 API로 base64
+          let extUrl = '';
+          try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e) {}
+          if (!extUrl && href.startsWith('http')) extUrl = href;
+          if (extUrl) {
+            return fetch(ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl))
+              .then(r => r.json()).then(j => { if (j.success && j.data) img.setAttribute('href', j.data); }).catch(() => {});
+          }
+          return Promise.resolve();
+        });
+        Promise.all(pending).then(() => {
+          // 2단계: <image>를 <pattern> fill 구조로 변환 (피그마 호환)
+          let patIdx = 0;
+          const defs = clone.querySelector('defs') || (() => { const d = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); clone.prepend(d); return d; })();
+          clone.querySelectorAll('image').forEach(img => {
+            const href = img.getAttribute('href') || '';
+            if (!href.startsWith('data:')) return; // base64 아닌 건 건너뜀
+            const x = parseFloat(img.getAttribute('x')) || 0;
+            const y = parseFloat(img.getAttribute('y')) || 0;
+            const w = parseFloat(img.getAttribute('width')) || 24;
+            const h = parseFloat(img.getAttribute('height')) || 24;
+            const pid = 'fgpat' + (patIdx++);
+            // <pattern> 생성
+            const pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pat.setAttribute('id', pid);
+            pat.setAttribute('patternUnits', 'objectBoundingBox');
+            pat.setAttribute('width', '1'); pat.setAttribute('height', '1');
+            const patImg = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+            patImg.setAttribute('href', href);
+            patImg.setAttribute('width', String(w)); patImg.setAttribute('height', String(h));
+            patImg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+            pat.appendChild(patImg);
+            defs.appendChild(pat);
+            // <image> → <rect fill="url(#pattern)">로 교체
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', String(x)); rect.setAttribute('y', String(y));
+            rect.setAttribute('width', String(w)); rect.setAttribute('height', String(h));
+            rect.setAttribute('rx', String(Math.min(w, h) / 2)); // 원형 모서리
+            rect.setAttribute('fill', 'url(#' + pid + ')');
+            img.parentNode.replaceChild(rect, img);
+          });
+          // clipPath 참조 정리 (더 이상 필요 없음)
+          const str = new XMLSerializer().serializeToString(clone);
+          const ta = document.createElement('textarea');
+          ta.value = str;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+          try { navigator.clipboard.writeText(str); } catch(e) {}
+          showToast('✅ SVG가 클립보드에 복사됐어요!<br><span style="font-size:12px;opacity:0.85">피그마에서 <b>Cmd+V</b>로 붙여넣으세요</span>');
         });
         return;
       }

@@ -104,45 +104,50 @@
     return Promise.all(Array.from(images).map(img => {
       const href = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
       if (!href || href.startsWith('data:')) return Promise.resolve();
-      // 프록시 URL이면 fetch로 base64 가져오기
-      if (href.includes('/api/icon?') && !href.includes('raw=1')) {
-        return fetch(href).then(r => r.json()).then(j => {
-          if (j.success && j.data) {
-            img.setAttribute('href', j.data);
-            img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
-          }
-        }).catch(() => {});
+
+      // 1순위: _iconCache에서 base64 찾기
+      const cache = SvgCharts._iconCache || {};
+      for (const [k, v] of Object.entries(cache)) {
+        if (!v || !v.startsWith('data:')) continue;
+        // href가 이 캐시 값과 연관되는지 확인
+        if (href === v || href.includes(encodeURIComponent(k)) || k === href) {
+          img.setAttribute('href', v);
+          img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          return Promise.resolve();
+        }
       }
-      return new Promise(resolve => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const imgEl = new Image();
-        imgEl.crossOrigin = 'anonymous';
-        imgEl.onload = () => {
-          canvas.width = imgEl.naturalWidth || 64;
-          canvas.height = imgEl.naturalHeight || 64;
-          ctx.drawImage(imgEl, 0, 0);
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
-            img.setAttribute('href', dataUrl);
-            img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
-          } catch(e) { /* CORS 실패 시 무시 */ }
-          resolve();
-        };
-        imgEl.onerror = () => {
-          // canvas 실패 시 fetch로 재시도 (프록시 URL 등)
-          if (href.includes('/api/icon?') || href.startsWith('/')) {
-            fetch(href.includes('raw=1') ? href.replace('&raw=1','') : href)
-              .then(r => r.json()).then(j => {
-                if (j.success && j.data) {
-                  img.setAttribute('href', j.data);
-                  img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
-                }
-              }).catch(() => {}).finally(resolve);
-          } else { resolve(); }
-        };
-        imgEl.src = href;
-      });
+      // href에서 앱 이름 추출 시도 (근처 text 요소에서)
+      const nearbyText = img.parentNode && img.parentNode.querySelector('text');
+      if (nearbyText) {
+        const name = nearbyText.textContent.trim();
+        if (cache[name] && cache[name].startsWith('data:')) {
+          img.setAttribute('href', cache[name]);
+          img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          return Promise.resolve();
+        }
+      }
+
+      // 2순위: 로컬 icons/ → canvas 변환
+      if (href.startsWith('icons/')) {
+        return new Promise(resolve => {
+          const c = document.createElement('canvas'), ctx = c.getContext('2d'), im = new Image();
+          im.onload = () => { c.width = im.naturalWidth || 64; c.height = im.naturalHeight || 64; ctx.drawImage(im, 0, 0); try { img.setAttribute('href', c.toDataURL('image/png')); } catch(e) {} resolve(); };
+          im.onerror = resolve; im.src = href;
+        });
+      }
+
+      // 3순위: 서버 API로 base64 가져오기
+      let extUrl = '';
+      try { extUrl = decodeURIComponent(href.split('url=')[1]?.split('&')[0] || ''); } catch(e) {}
+      if (!extUrl && href.startsWith('http')) extUrl = href;
+      if (extUrl) {
+        return fetch(ApiClient.BASE_URL + '/icon?url=' + encodeURIComponent(extUrl))
+          .then(r => r.json()).then(j => {
+            if (j.success && j.data) { img.setAttribute('href', j.data); img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href'); }
+          }).catch(() => {});
+      }
+
+      return Promise.resolve();
     }));
   }
 

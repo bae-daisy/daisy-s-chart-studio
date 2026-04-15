@@ -98,22 +98,39 @@
   }, true);
 
   // ── SVG 이미지 base64 인라인화 (다운로드용) ──
+  // webp base64 → png base64 변환 (피그마 호환)
+  function webpToPng(dataUrl) {
+    if (!dataUrl.includes('image/webp')) return Promise.resolve(dataUrl);
+    return new Promise(resolve => {
+      const im = new Image();
+      im.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = im.naturalWidth || 64; c.height = im.naturalHeight || 64;
+        c.getContext('2d').drawImage(im, 0, 0);
+        try { resolve(c.toDataURL('image/png')); } catch(e) { resolve(dataUrl); }
+      };
+      im.onerror = () => resolve(dataUrl);
+      im.src = dataUrl;
+    });
+  }
+
   function inlineSvgImages(svgEl) {
     const images = svgEl.querySelectorAll('image');
     if (images.length === 0) return Promise.resolve();
     return Promise.all(Array.from(images).map(img => {
       const href = img.getAttribute('href') || img.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
-      if (!href || href.startsWith('data:')) return Promise.resolve();
+      if (!href) return Promise.resolve();
+      // 이미 data:인 경우 webp→png 변환만
+      if (href.startsWith('data:')) {
+        return webpToPng(href).then(png => { img.setAttribute('href', png); });
+      }
 
       // 1순위: _iconCache에서 base64 찾기
       const cache = SvgCharts._iconCache || {};
       for (const [k, v] of Object.entries(cache)) {
         if (!v || !v.startsWith('data:')) continue;
-        // href가 이 캐시 값과 연관되는지 확인
         if (href === v || href.includes(encodeURIComponent(k)) || k === href) {
-          img.setAttribute('href', v);
-          img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
-          return Promise.resolve();
+          return webpToPng(v).then(png => { img.setAttribute('href', png); img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href'); });
         }
       }
       // href에서 앱 이름 추출 시도 (근처 text 요소에서)
@@ -121,9 +138,7 @@
       if (nearbyText) {
         const name = nearbyText.textContent.trim();
         if (cache[name] && cache[name].startsWith('data:')) {
-          img.setAttribute('href', cache[name]);
-          img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
-          return Promise.resolve();
+          return webpToPng(cache[name]).then(png => { img.setAttribute('href', png); img.removeAttributeNS('http://www.w3.org/1999/xlink', 'href'); });
         }
       }
 

@@ -581,18 +581,20 @@ app.get('/api/icon', async (req, res) => {
 
     const contentType = imgResp.headers.get('content-type') || 'image/png';
     const buffer = Buffer.from(await imgResp.arrayBuffer());
+    // webp → png로 content-type 강제 (피그마 호환)
+    const finalCt = contentType.includes('webp') ? 'image/png' : contentType;
 
     res.setHeader('Cache-Control', 'public, max-age=86400');
 
     // ?raw=1 → 이미지 바이너리 직접 반환 (SVG <image href>에서 사용 가능)
     if (req.query.raw === '1') {
-      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Type', finalCt);
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.send(buffer);
     }
 
     // 기본: JSON 응답 (하위 호환)
-    const base64 = `data:${contentType};base64,${buffer.toString('base64')}`;
+    const base64 = `data:${finalCt};base64,${buffer.toString('base64')}`;
     res.json({ success: true, data: base64 });
   } catch (e) {
     res.status(502).json({ error: 'timeout' });
@@ -611,26 +613,31 @@ app.post('/api/search-batch', async (req, res) => {
   const fetchHeaders = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' };
   const results = {};
 
-  // 아이콘 URL → base64 변환 헬퍼 (64px 축소)
+  // 아이콘 URL → base64 변환 헬퍼 (64px 축소, PNG 강제)
   async function iconToBase64(url) {
     if (!url || !url.startsWith('https://')) return '';
     try {
-      // 구글 플레이 아이콘은 =s64로 축소 요청
+      // 구글 플레이 아이콘은 =s64-rw로 축소 + PNG 형식 요청
       let smallUrl = url;
       if (url.includes('googleusercontent.com')) {
-        smallUrl = url.replace(/=s\d+(-rw)?$/, '') + '=s64-rw';
+        smallUrl = url.replace(/=s\d+(-rw)?(-.*)?$/, '') + '=s64-rw-png';
       }
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), 4000);
       const resp = await fetch(smallUrl, {
         signal: ctrl.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChartStudio/1.0)' }
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ChartStudio/1.0)',
+          'Accept': 'image/png, image/jpeg, image/*'
+        }
       });
       clearTimeout(tid);
       if (!resp.ok) return '';
       const ct = resp.headers.get('content-type') || 'image/png';
       const buf = Buffer.from(await resp.arrayBuffer());
-      return `data:${ct};base64,${buf.toString('base64')}`;
+      // webp인 경우 content-type을 png로 강제 (피그마 호환)
+      const finalCt = ct.includes('webp') ? 'image/png' : ct;
+      return `data:${finalCt};base64,${buf.toString('base64')}`;
     } catch(e) { return ''; }
   }
 

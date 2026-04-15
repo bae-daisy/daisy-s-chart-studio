@@ -21,9 +21,18 @@ const T = {
   chartBottom() {
     const hl = SvgCharts && SvgCharts._hasLegend;
     const hs = SvgCharts && SvgCharts._hasSource;
-    if (!hl && !hs) return 680;
-    if (!hl) return 660;
-    return 650;
+    const kind = SvgCharts && SvgCharts._chartKind || '';
+    // 차트별 하단 위치 (범례/출처/아이콘 영역 확보)
+    const base = (!hl && !hs) ? 680 : !hl ? 660 : 640;
+    // verticalBar: X축 라벨 + 아이콘 공간 필요 → 더 위로
+    if (kind === 'verticalBar') return hl ? 600 : 640;
+    // line/combo: 범례 칩이 크므로 여유 확보
+    if (kind === 'line' || kind === 'combo') return hl ? 610 : 650;
+    // horizontalBar: 범례 없이 라벨이 왼쪽에 있으므로 넉넉하게
+    if (kind === 'horizontalBar') return hl ? 640 : 670;
+    // donut: 범례가 오른쪽에 있으므로 하단 여유
+    if (kind === 'donut') return 670;
+    return base;
   },
 
   // 색상 팔레트 프리셋 — 기본색 + 명도 단계 자동 생성

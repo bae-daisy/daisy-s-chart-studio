@@ -2981,6 +2981,7 @@
 
     // 전역 설정 (SVG 차트에서 참조)
     SvgCharts._filterInfo = filterInfo || '';
+    SvgCharts._chartKind = chartKind;
     SvgCharts._hideValueLabels = slide.hideValueLabels || false;
     SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
     SvgCharts._showAppIcons = slide.showAppIcons !== false;

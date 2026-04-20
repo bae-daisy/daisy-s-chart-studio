@@ -2111,7 +2111,7 @@
               </select>
             </div>
           </div>
-        </div>
+        </div>`}
         ${['verticalBar','line','combo','stackedBar'].includes(slide.chartKind) ? `
         ${slide.chartKind === 'combo' ? `
         <div class="ie-section">
@@ -2138,7 +2138,7 @@
             <button class="ie-btn ie-yaxis-reset" style="font-size:11px;padding:4px 8px">초기화</button>
           </div>
         </div>`}
-        `}
+        ` : ''}
         ${(() => {
           // 범례 설정 — 시리즈 2개 이상 또는 도넛일 때
           const legendHeaders = [];
@@ -2195,7 +2195,7 @@
             <select class="ie-select" data-key="rangeEnd">${rangeOptions}</select>
           </div>
         </div>` : ''}
-          </div>
+        </div>
         </details>
       </div>
     `;

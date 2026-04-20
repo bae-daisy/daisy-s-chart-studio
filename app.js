@@ -4111,10 +4111,9 @@
     const ob = document.querySelector('.onboarding');
     if (!ob) return;
     ob.addEventListener('mousemove', function(e) {
-      const x = ((e.clientX / window.innerWidth) * 100).toFixed(1) + '%';
-      const y = ((e.clientY / window.innerHeight) * 100).toFixed(1) + '%';
-      ob.style.setProperty('--mx', x);
-      ob.style.setProperty('--my', y);
+      const x = ((e.clientX / window.innerWidth) * 100).toFixed(1);
+      const y = ((e.clientY / window.innerHeight) * 100).toFixed(1);
+      ob.style.background = 'radial-gradient(ellipse 600px 600px at ' + x + '% ' + y + '%, rgba(108,92,231,0.08) 0%, transparent 70%), #FAFAFA';
     });
   })();
 

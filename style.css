@@ -38,18 +38,7 @@ body {
   position: relative;
   overflow: visible;
 }
-.onboarding::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 600px 600px at var(--mx, 50%) var(--my, 40%), rgba(108,92,231,0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 400px 400px at calc(var(--mx, 50%) + 15%) calc(var(--my, 40%) - 10%), rgba(168,155,254,0.06) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: 0;
-  transition: background 0.3s ease;
-}
-.onboarding > * { position: relative; z-index: 1; }
+.onboarding > * { position: relative; }
 .onboarding-title, .onboarding-badge span { color: var(--text); }
 .onboarding-desc { color: var(--text-muted) !important; }
 

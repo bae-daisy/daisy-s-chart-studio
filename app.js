@@ -2228,7 +2228,12 @@
 
     // 실시간 업데이트 함수
     const liveUpdate = () => {
-      panel.querySelectorAll('.ie-input:not(.ie-icon-url-input)').forEach(inp => { slide[inp.dataset.key] = inp.value; });
+      panel.querySelectorAll('.ie-input:not(.ie-icon-url-input):not(.ie-ymin):not(.ie-ymax)').forEach(inp => { slide[inp.dataset.key] = inp.value; });
+      // Y축 최소/최대 (숫자 변환, 빈 값은 null)
+      const yminEl = panel.querySelector('.ie-ymin');
+      const ymaxEl = panel.querySelector('.ie-ymax');
+      if (yminEl) slide.yAxisMin = yminEl.value !== '' ? Number(yminEl.value) : null;
+      if (ymaxEl) slide.yAxisMax = ymaxEl.value !== '' ? Number(ymaxEl.value) : null;
       // 아이콘 URL 업데이트
       panel.querySelectorAll('.ie-icon-url-input').forEach(inp => {
         const name = inp.dataset.name;

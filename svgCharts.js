@@ -329,9 +329,9 @@ const SvgCharts = {
     labels.forEach((l,gi) => {
       const gx = padL+gi*gW;
       series.forEach((s,si) => {
-        const v=s.data[gi]||0, bH=((v - yFloor)/yRange)*cH, bx=gx+gPad+si*(bW+bGap), by=cTop+cH-Math.max(0,bH);
+        const v=s.data[gi]||0, bH=Math.max(0, ((v - yFloor)/yRange)*cH), bx=gx+gPad+si*(bW+bGap), by=cTop+cH-bH;
         const c = colors[si]||T.SERIES[si%T.SERIES.length];
-        svg += `<rect x="${bx}" y="${by}" width="${bW}" height="${bH}" fill="${c}" rx="${Math.min(4,bW/2)}"/>`;
+        svg += `<rect x="${bx}" y="${by}" width="${bW}" height="${Math.max(0,bH)}" fill="${c}" rx="${Math.min(4,bW/2)}"/>`;
         const dp = SvgCharts._decimalPlaces;
         if (bW>=28 && !SvgCharts._hideValueLabels) svg += `<text x="${bx+bW/2}" y="${by-8}" text-anchor="middle" fill="${T.textDark}" font-size="11" font-weight="600">${T.fmtTick(v, dp, useMan)}</text>`;
       });

@@ -175,7 +175,9 @@ const SvgCharts = {
     const cW = W-padL-padR-_endpointPadR, cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20 - _lnLegendIconExtra, cH = cBot-cTop;
     const allV = series.flatMap(s=>s.data);
     const mn = Math.min(...allV), mx = Math.max(...allV), rng = mx-mn||1;
-    const yMin = Math.max(0, mn-rng*0.1), yMax = mx+rng*0.1, yR = yMax-yMin;
+    const yMin = SvgCharts._yAxisMin != null ? SvgCharts._yAxisMin : Math.max(0, mn-rng*0.1);
+    const yMax = SvgCharts._yAxisMax != null ? SvgCharts._yAxisMax : mx+rng*0.1;
+    const yR = yMax-yMin || 1;
     const xStep = labels.length>1 ? cW/(labels.length-1) : cW;
     const toX = i => labels.length===1 ? padL+cW/2 : padL+i*xStep, toY = v => cTop+cH-((v-yMin)/yR)*cH;
     let svg = '';
@@ -309,22 +311,25 @@ const SvgCharts = {
     const _icM = _hasIcons ? this._iconMetrics(SvgCharts._iconSize) : null;
     const _iconAreaH = _hasIcons && _icM ? (_icM.radius * 2 + _icM.padding + 18) : 0;
     const cTop = T.chartTop(!!subtitle), cBot = T.chartBottom()-20 - _iconAreaH, cH = cBot-cTop, cW = W-padL-padR;
-    const mx = Math.max(...series.flatMap(s=>s.data),1);
+    const _autoMx = Math.max(...series.flatMap(s=>s.data),1);
+    const mx = SvgCharts._yAxisMax != null ? SvgCharts._yAxisMax : _autoMx;
+    const yFloor = SvgCharts._yAxisMin != null ? SvgCharts._yAxisMin : 0;
     const gW = cW/labels.length, gPad = Math.max(20,gW*0.2);
     const bArea = gW-gPad*2, bGap = Math.max(3,bArea*0.08);
     const bW = Math.max(6,(bArea-bGap*(series.length-1))/series.length);
-    const toY = v => cTop+cH-(v/mx)*cH;
+    const yRange = mx - yFloor || 1;
+    const toY = v => cTop+cH-((v - yFloor)/yRange)*cH;
     let svg = '';
     const useMan = mx >= 1e4;
     for (let i=0;i<=4;i++) {
-      const tick=(mx/4)*i, y=toY(tick);
+      const tick=yFloor+(yRange/4)*i, y=toY(tick);
       svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${T.divider}"/>`;
       svg += `<text x="${padL-14}" y="${y+5}" text-anchor="end" fill="${T.textMuted}" font-size="12">${T.fmtTick(tick, SvgCharts._decimalPlaces, useMan)}</text>`;
     }
     labels.forEach((l,gi) => {
       const gx = padL+gi*gW;
       series.forEach((s,si) => {
-        const v=s.data[gi]||0, bH=(v/mx)*cH, bx=gx+gPad+si*(bW+bGap), by=cTop+cH-bH;
+        const v=s.data[gi]||0, bH=((v - yFloor)/yRange)*cH, bx=gx+gPad+si*(bW+bGap), by=cTop+cH-Math.max(0,bH);
         const c = colors[si]||T.SERIES[si%T.SERIES.length];
         svg += `<rect x="${bx}" y="${by}" width="${bW}" height="${bH}" fill="${c}" rx="${Math.min(4,bW/2)}"/>`;
         const dp = SvgCharts._decimalPlaces;
@@ -489,9 +494,11 @@ const SvgCharts = {
     // 아이콘 범례 칩 높이만큼 차트 영역 축소
     var _cmLegExtra = (SvgCharts._showAppIcons !== false) ? 40 : 0;
     const cTop=T.chartTop(!!subtitle), cBot=T.chartBottom() - _cmLegExtra, cH=cBot-cTop, cW=W-padL-padR;
-    const bMx=Math.max(...barData,1);
+    const bMx=SvgCharts._yAxisMax != null ? SvgCharts._yAxisMax : Math.max(...barData,1);
     const lMn=Math.min(...lineData), lMx=Math.max(...lineData), lRng=lMx-lMn||1;
-    const lYMin=Math.max(0,lMn-lRng*0.2), lYMax=lMx+lRng*0.2, lYR=lYMax-lYMin;
+    const lYMin=SvgCharts._yAxisMin != null ? SvgCharts._yAxisMin : Math.max(0,lMn-lRng*0.2);
+    const lYMax=SvgCharts._yAxisMax != null ? SvgCharts._yAxisMax : lMx+lRng*0.2;
+    const lYR=lYMax-lYMin || 1;
     const xStep=labels.length>1?cW/labels.length:cW, bW=Math.max(6,xStep*0.5);
     const toBarY=v=>cTop+cH-(v/bMx)*cH, toLineY=v=>cTop+cH-((v-lYMin)/lYR)*cH, toX=i=>padL+i*xStep+xStep/2;
     let svg='';

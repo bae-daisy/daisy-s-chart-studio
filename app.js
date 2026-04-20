@@ -2111,7 +2111,18 @@
               </select>
             </div>
           </div>
-        </div>`}
+        </div>
+        ${['verticalBar','line','combo','stackedBar'].includes(slide.chartKind) ? `
+        <div class="ie-section">
+          <div class="ie-label">📏 Y축 범위</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input class="ie-input ie-ymin" type="number" data-key="yAxisMin" value="${slide.yAxisMin != null ? slide.yAxisMin : ''}" placeholder="최소 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
+            <span style="color:var(--text-muted)">~</span>
+            <input class="ie-input ie-ymax" type="number" data-key="yAxisMax" value="${slide.yAxisMax != null ? slide.yAxisMax : ''}" placeholder="최대 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
+            <button class="ie-btn ie-yaxis-reset" style="font-size:11px;padding:4px 8px">초기화</button>
+          </div>
+        </div>` : ''}
+        `}
         ${(() => {
           // 범례 설정 — 시리즈 2개 이상 또는 도넛일 때
           const legendHeaders = [];
@@ -2257,6 +2268,31 @@
     if (decSelect) {
       decSelect.addEventListener('change', () => {
         slide.decimalPlaces = Number(decSelect.value);
+        liveUpdate();
+      });
+    }
+
+    // Y축 최소/최대
+    const yminInput = panel.querySelector('.ie-ymin');
+    const ymaxInput = panel.querySelector('.ie-ymax');
+    const yaxisReset = panel.querySelector('.ie-yaxis-reset');
+    if (yminInput) {
+      yminInput.addEventListener('change', () => {
+        slide.yAxisMin = yminInput.value !== '' ? Number(yminInput.value) : null;
+        liveUpdate();
+      });
+    }
+    if (ymaxInput) {
+      ymaxInput.addEventListener('change', () => {
+        slide.yAxisMax = ymaxInput.value !== '' ? Number(ymaxInput.value) : null;
+        liveUpdate();
+      });
+    }
+    if (yaxisReset) {
+      yaxisReset.addEventListener('click', () => {
+        slide.yAxisMin = null; slide.yAxisMax = null;
+        if (yminInput) yminInput.value = '';
+        if (ymaxInput) ymaxInput.value = '';
         liveUpdate();
       });
     }
@@ -2982,6 +3018,8 @@
     // 전역 설정 (SVG 차트에서 참조)
     SvgCharts._filterInfo = filterInfo || '';
     SvgCharts._chartKind = chartKind;
+    SvgCharts._yAxisMin = slide.yAxisMin != null ? slide.yAxisMin : null;
+    SvgCharts._yAxisMax = slide.yAxisMax != null ? slide.yAxisMax : null;
     SvgCharts._hideValueLabels = slide.hideValueLabels || false;
     SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
     SvgCharts._showAppIcons = slide.showAppIcons !== false;

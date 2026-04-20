@@ -495,9 +495,10 @@ const SvgCharts = {
     var _cmLegExtra = (SvgCharts._showAppIcons !== false) ? 40 : 0;
     const cTop=T.chartTop(!!subtitle), cBot=T.chartBottom() - _cmLegExtra, cH=cBot-cTop, cW=W-padL-padR;
     const bMx=SvgCharts._yAxisMax != null ? SvgCharts._yAxisMax : Math.max(...barData,1);
+    const bMn=SvgCharts._yAxisMin != null ? SvgCharts._yAxisMin : 0;
     const lMn=Math.min(...lineData), lMx=Math.max(...lineData), lRng=lMx-lMn||1;
-    const lYMin=SvgCharts._yAxisMin != null ? SvgCharts._yAxisMin : Math.max(0,lMn-lRng*0.2);
-    const lYMax=SvgCharts._yAxisMax != null ? SvgCharts._yAxisMax : lMx+lRng*0.2;
+    const lYMin=SvgCharts._yAxisMinR != null ? SvgCharts._yAxisMinR : Math.max(0,lMn-lRng*0.2);
+    const lYMax=SvgCharts._yAxisMaxR != null ? SvgCharts._yAxisMaxR : lMx+lRng*0.2;
     const lYR=lYMax-lYMin || 1;
     const xStep=labels.length>1?cW/labels.length:cW, bW=Math.max(6,xStep*0.5);
     const toBarY=v=>cTop+cH-(v/bMx)*cH, toLineY=v=>cTop+cH-((v-lYMin)/lYR)*cH, toX=i=>padL+i*xStep+xStep/2;

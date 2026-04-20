@@ -2113,6 +2113,22 @@
           </div>
         </div>
         ${['verticalBar','line','combo','stackedBar'].includes(slide.chartKind) ? `
+        ${slide.chartKind === 'combo' ? `
+        <div class="ie-section">
+          <div class="ie-label">📏 왼쪽 축 (막대) 범위</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input class="ie-input ie-ymin" type="number" data-key="yAxisMin" value="${slide.yAxisMin != null ? slide.yAxisMin : ''}" placeholder="최소 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
+            <span style="color:var(--text-muted)">~</span>
+            <input class="ie-input ie-ymax" type="number" data-key="yAxisMax" value="${slide.yAxisMax != null ? slide.yAxisMax : ''}" placeholder="최대 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
+          </div>
+          <div class="ie-label" style="margin-top:10px">📏 오른쪽 축 (꺾은선) 범위</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input class="ie-input ie-ymin-r" type="number" value="${slide.yAxisMinR != null ? slide.yAxisMinR : ''}" placeholder="최소 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
+            <span style="color:var(--text-muted)">~</span>
+            <input class="ie-input ie-ymax-r" type="number" value="${slide.yAxisMaxR != null ? slide.yAxisMaxR : ''}" placeholder="최대 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
+          </div>
+          <button class="ie-btn ie-yaxis-reset" style="font-size:11px;padding:4px 8px;margin-top:6px">초기화</button>
+        </div>` : `
         <div class="ie-section">
           <div class="ie-label">📏 Y축 범위</div>
           <div style="display:flex;align-items:center;gap:8px">
@@ -2121,7 +2137,7 @@
             <input class="ie-input ie-ymax" type="number" data-key="yAxisMax" value="${slide.yAxisMax != null ? slide.yAxisMax : ''}" placeholder="최대 (자동)" style="width:80px;font-size:12px;padding:6px 8px">
             <button class="ie-btn ie-yaxis-reset" style="font-size:11px;padding:4px 8px">초기화</button>
           </div>
-        </div>` : ''}
+        </div>`}
         `}
         ${(() => {
           // 범례 설정 — 시리즈 2개 이상 또는 도넛일 때
@@ -2234,6 +2250,10 @@
       const ymaxEl = panel.querySelector('.ie-ymax');
       if (yminEl) slide.yAxisMin = yminEl.value !== '' ? Number(yminEl.value) : null;
       if (ymaxEl) slide.yAxisMax = ymaxEl.value !== '' ? Number(ymaxEl.value) : null;
+      const yminREl = panel.querySelector('.ie-ymin-r');
+      const ymaxREl = panel.querySelector('.ie-ymax-r');
+      if (yminREl) slide.yAxisMinR = yminREl.value !== '' ? Number(yminREl.value) : null;
+      if (ymaxREl) slide.yAxisMaxR = ymaxREl.value !== '' ? Number(ymaxREl.value) : null;
       // 아이콘 URL 업데이트
       panel.querySelectorAll('.ie-icon-url-input').forEach(inp => {
         const name = inp.dataset.name;
@@ -2296,8 +2316,28 @@
     if (yaxisReset) {
       yaxisReset.addEventListener('click', () => {
         slide.yAxisMin = null; slide.yAxisMax = null;
+        slide.yAxisMinR = null; slide.yAxisMaxR = null;
         if (yminInput) yminInput.value = '';
         if (ymaxInput) ymaxInput.value = '';
+        const yrmin = panel.querySelector('.ie-ymin-r');
+        const yrmax = panel.querySelector('.ie-ymax-r');
+        if (yrmin) yrmin.value = '';
+        if (yrmax) yrmax.value = '';
+        liveUpdate();
+      });
+    }
+    // 오른쪽 축 (combo)
+    const yminR = panel.querySelector('.ie-ymin-r');
+    const ymaxR = panel.querySelector('.ie-ymax-r');
+    if (yminR) {
+      yminR.addEventListener('change', () => {
+        slide.yAxisMinR = yminR.value !== '' ? Number(yminR.value) : null;
+        liveUpdate();
+      });
+    }
+    if (ymaxR) {
+      ymaxR.addEventListener('change', () => {
+        slide.yAxisMaxR = ymaxR.value !== '' ? Number(ymaxR.value) : null;
         liveUpdate();
       });
     }
@@ -3025,6 +3065,8 @@
     SvgCharts._chartKind = chartKind;
     SvgCharts._yAxisMin = slide.yAxisMin != null ? slide.yAxisMin : null;
     SvgCharts._yAxisMax = slide.yAxisMax != null ? slide.yAxisMax : null;
+    SvgCharts._yAxisMinR = slide.yAxisMinR != null ? slide.yAxisMinR : null;
+    SvgCharts._yAxisMaxR = slide.yAxisMaxR != null ? slide.yAxisMaxR : null;
     SvgCharts._hideValueLabels = slide.hideValueLabels || false;
     SvgCharts._decimalPlaces = slide.decimalPlaces != null ? slide.decimalPlaces : null;
     SvgCharts._showAppIcons = slide.showAppIcons !== false;

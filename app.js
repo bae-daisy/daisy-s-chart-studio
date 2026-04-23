@@ -1253,7 +1253,7 @@
           <button class="st-btn edit-btn" title="장표 설정">⚙️ 설정</button>
           <button class="st-btn dl-png-btn" title="PNG 다운로드">📥 PNG</button>
           <button class="st-btn dl-svg-btn" title="SVG 다운로드">📥 SVG</button>
-          <button class="st-btn figma-btn" title="SVG를 클립보드에 복사 → 피그마에서 붙여넣기">🎨 피그마</button>
+          <button class="st-btn figma-btn" title="SVG를 클립보드에 복사 → 피그마에서 Cmd+V로 붙여넣기. 세부 편집은 피그마에서!">🎨 피그마</button>
           <button class="st-btn del-btn" title="삭제">🗑️</button>
         </div>
       `;
